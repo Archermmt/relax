@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file utils.cc
+ * \file src/contrib/msc/core/transform/layout_utils.cc
  */
 #include "layout_utils.h"
 

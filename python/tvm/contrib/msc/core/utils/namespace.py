@@ -14,8 +14,41 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils"""
+"""tvm.contrib.msc.core.utils.namespace"""
 
-from .arguments import *
-from .expr_utils import *
-from .namespace import *
+import copy
+
+
+class MSC_MAP:
+    """Global Namespace map for MSC"""
+
+    MAP = {}
+
+    @classmethod
+    def set(cls, key, value):
+        cls.MAP[key] = value
+
+    @classmethod
+    def get(cls, key, default=None):
+        return cls.MAP.get(key, default)
+
+    @classmethod
+    def clone(cls, key, default=None):
+        return copy.deepcopy(cls.get(key, default))
+
+    @classmethod
+    def delete(cls, key):
+        if key in cls.MAP:
+            return cls.MAP.pop(key)
+        return None
+
+    @classmethod
+    def contains(cls, key):
+        return key in cls.MAP
+
+
+class MSC_KEY:
+    """Keys for the MSC_MAP"""
+
+    WORKSPACE = "workspace"
+    VERBOSE = "verbose"

@@ -18,16 +18,14 @@
  */
 
 /*!
- * \file tvm/contrib/msc/core/transform/set_var_layout.cc
- * \brief Pass for setting layout for var and constant.
+ * \file src/contrib/msc/core/transform/set_expr_layout.cc
+ * \brief Pass for setting layout for expr and constant.
  */
 
 #include <tvm/relax/expr.h>
 #include <tvm/relax/expr_functor.h>
 #include <tvm/relax/transform.h>
 
-// #include "../../../../relax/transform/infer_layout_utils.h"
-// #include "../../../../relax/transform/utils.h"
 #include "../utils.h"
 #include "layout_utils.h"
 

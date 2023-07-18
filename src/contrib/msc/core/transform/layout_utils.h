@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file layout_utils.h
+ * \file src/contrib/msc/core/transform/layout_utils.h
  * \brief Common utilities for layout.
  */
 #ifndef TVM_CONTRIB_MSC_CORE_TRANSFORM_LAYOUT_UTILS_H_
@@ -27,8 +27,8 @@
 #include <tvm/ir/source_map.h>
 #include <tvm/relax/expr.h>
 
-#include "../../../../relax/transform/utils.h"
 #include "../../../../relax/transform/infer_layout_utils.h"
+#include "../../../../relax/transform/utils.h"
 #include "../utils.h"
 
 namespace tvm {

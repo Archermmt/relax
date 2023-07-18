@@ -19,6 +19,7 @@
 import tvm
 from tvm.relax.transform import BindParams
 from tvm.contrib.msc.core.transform import transform
+from tvm.contrib.msc.core import _ffi_api
 from tvm.contrib.msc.core import utils as msc_utils
 
 
@@ -39,6 +40,7 @@ def from_relax(mod, params=None, trans_config=None, build_config=None):
     Returns
     -------
     graph: tvm.contrib.msc.core.ir.MSCGraph
+        The translated graph.
     """
 
     trans_config = trans_config or {}
@@ -50,7 +52,6 @@ def from_relax(mod, params=None, trans_config=None, build_config=None):
         transform.SetExprLayout(trans_config.get("allow_layout_missing", True)),
     ]
     mod = tvm.transform.Sequential(passes)(mod)
-    print(msc_utils.show_function(mod))
-    info = msc_utils.get_span_attrs(mod)
-    print("[TMINFO] info " + str(info))
-    return mod
+    graph = _ffi_api.BuildFromRelax(mod, "main", msc_utils.dump_config(build_config))
+    weights = _ffi_api.GetRelaxWeights(mod, "main")
+    return graph, weights

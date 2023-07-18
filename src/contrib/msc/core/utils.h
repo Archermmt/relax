@@ -26,13 +26,24 @@
 
 #include <tvm/ir/source_map.h>
 #include <tvm/relax/expr.h>
+#include <tvm/relay/expr.h>
 
 namespace tvm {
 namespace contrib {
 namespace msc {
 
 using Expr = tvm::RelayExpr;
-using namespace tvm::relax;
+using RelaxCall = tvm::relax::Call;
+using RelayCall = tvm::relay::Call;
+
+class CommonUtils {
+ public:
+  /*!
+   * \brief Check if the index is in range.
+   * \return The valid index.
+   */
+  TVM_DLL static size_t GetIndex(int index, size_t max_size);
+};
 
 /*!
  * \brief Utils for String.
@@ -44,6 +55,19 @@ class StringUtils {
    * \return The SubStrings.
    */
   TVM_DLL static Array<String> Split(const String& src_string, const String& sep);
+
+  /*!
+   * \brief Join the SubStrings into String.
+   * \return The String.
+   */
+  TVM_DLL static String Join(const Array<String>& sub_strings, const String& joint);
+
+  /*!
+   * \brief Replace the substring ole to new in String.
+   * \return The replaced String.
+   */
+  TVM_DLL static String Replace(const String& src_string, const String& old_str,
+                                const String& new_str);
 
   /*!
    * \brief Split the String into two sub Strings, only split by the frist seq.
@@ -65,6 +89,12 @@ class StringUtils {
    */
   TVM_DLL static String GetClosureOnce(const String& src_string, const String& left,
                                        const String& right, bool from_left = true);
+
+  /*!
+   * \brief Change Object to String.
+   * \return The String.
+   */
+  TVM_DLL static String ToString(const runtime::ObjectRef& obj);
 };
 
 /*!
@@ -100,7 +130,19 @@ class ExprUtils {
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static Array<String> GetInputTypes(const Call& call);
+  TVM_DLL static Array<String> GetInputTypes(const String& optype);
+
+  /*!
+   * \brief Get the input types of call.
+   * \return The input types.
+   */
+  TVM_DLL static Array<String> GetInputTypes(const RelaxCall& call);
+
+  /*!
+   * \brief Get the input types of call.
+   * \return The input types.
+   */
+  TVM_DLL static Array<String> GetInputTypes(const RelayCall& call);
 };
 
 }  // namespace msc

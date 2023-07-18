@@ -17,18 +17,26 @@
 """tvm.contrib.msc.core.transform.transform"""
 
 import tvm
-from tvm.relax.transform import _ffi_api
+from tvm.relax.transform import _ffi_api as relax_api
+from tvm.relay.transform import _ffi_api as relay_api
 
 
-def SetExprName() -> tvm.ir.transform.Pass:
+def SetExprName(as_relax=True) -> tvm.ir.transform.Pass:
     """Set name for the call and constant in IRModule.
+
+    Parameters
+    ----------
+    as_relax: bool
+        Whether set names for relax, otherwise for relay.
 
     Returns
     -------
     ret: tvm.ir.transform.Pass
     """
 
-    return _ffi_api.SetExprName()  # type: ignore
+    if as_relax:
+        return relax_api.SetRelaxExprName()  # type: ignore
+    return relay_api.SetRelayExprName()  # type: ignore
 
 
 def SetExprLayout(allow_missing=True) -> tvm.ir.transform.Pass:
@@ -44,4 +52,4 @@ def SetExprLayout(allow_missing=True) -> tvm.ir.transform.Pass:
     ret: tvm.ir.transform.Pass
     """
 
-    return _ffi_api.SetExprLayout(allow_missing)  # type: ignore
+    return relax_api.SetExprLayout(allow_missing)  # type: ignore

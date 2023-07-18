@@ -22,18 +22,18 @@ import tvm
 import tvm.testing
 from tvm.relax.frontend.torch import from_fx
 from tvm.contrib.msc.core.ir import translate
+from tvm.contrib.msc.core import utils as msc_utils
 
 
 def verify_model(torch_model, input_info):
     graph_model = fx.symbolic_trace(torch_model)
     with torch.no_grad():
         mod = from_fx(graph_model, input_info)
-    print("[TMINFO] calling mod.script!!")
-    print(mod.script())
-    graph = translate.from_relax(mod)
+    print("[TMINFO] relax mod " + str(mod))
+    graph, weights = translate.from_relax(mod)
 
-    print("[TMINFO] after from_relax")
-    print(graph.script())
+    print("[TMINFO] after from_relax " + str(graph))
+    print("weights " + str(weights))
 
     raise Exception("stop here!!")
     # tvm.ir.assert_structural_equal(mod, expected)

@@ -14,8 +14,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils"""
+"""tvm.contrib.msc.core.utils.arguments"""
 
-from .arguments import *
-from .expr_utils import *
-from .namespace import *
+import json
+
+
+def dump_config(config: dict) -> str:
+    """Dump the config to string.
+
+    Parameters
+    ----------
+    config: dict
+        The config.
+
+    Returns
+    -------
+    options: string
+        The dumped config.
+    """
+
+    if not config:
+        return ""
+    return json.dumps({k: int(v) if isinstance(v, bool) else v for k, v in config.items()})
