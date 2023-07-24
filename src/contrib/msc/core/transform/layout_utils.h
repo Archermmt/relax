@@ -59,13 +59,13 @@ class LayoutUtils {
    * \brief Get the layout from span
    * \return The NLayout.
    */
-  TVM_DLL static NLayout GetNLayout(const Expr& expr);
+  TVM_DLL static const NLayout GetNLayout(const Expr& expr);
 
   /*!
    * \brief Get the layout desion from span
    * \return The LayoutDecision.
    */
-  TVM_DLL static LayoutDecision GetLayoutDecision(const Expr& expr);
+  TVM_DLL static const LayoutDecision GetLayoutDecision(const Expr& expr);
 
   /*!
    * \brief Check if the layout has unknown dim tensor.
@@ -83,14 +83,14 @@ class LayoutUtils {
    * \brief Insert axes to the Layout
    * \return The new layout.
    */
-  TVM_DLL static LayoutDecision ExpandLayout(const LayoutDecision& src_layout,
+  TVM_DLL static const LayoutDecision ExpandLayout(const LayoutDecision& src_layout,
                                              const std::vector<size_t>& expand_axes);
 
   /*!
    * \brief Delete axes from the Layout
    * \return The new layout.
    */
-  TVM_DLL static LayoutDecision ReduceLayout(const LayoutDecision& src_layout,
+  TVM_DLL static const LayoutDecision ReduceLayout(const LayoutDecision& src_layout,
                                              const std::vector<size_t>& reduce_axes);
 };
 

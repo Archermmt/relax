@@ -90,19 +90,16 @@ void PrototxtPrinter::PrintTypedDoc(const DictDoc& doc) {
   for (size_t i = 0; i < doc->keys.size(); i++) {
     ICHECK(doc->keys[i].as<IdDocNode>())
         << "Prototxt key should be IdDoc, get " << doc->keys[i]->GetTypeKey();
-    StartLine();
     PrintDoc(doc->keys[i]);
     if (doc->values[i].as<DictDocNode>()) {
       output_ << " {";
       IncreaseIndent();
-      NewLine();
       PrintDoc(doc->values[i]);
-      output_ << "}";
       DecreaseIndent();
+      NewLine() << "}";
     } else {
       output_ << ": ";
-      PrintDoc(doc->values[i]);
-      NewLine();
+      PrintDoc(doc->values[i], false);
     }
   }
 }

@@ -40,12 +40,10 @@ using namespace tvm::script::printer;
 class PrototxtPrinter : public MSCBasePrinter {
  public:
   /*!
-   * \brief The constructor of DocPrinter
-   * \param options the options for the printer.
-   * \param indent the start indent.
+   * \brief The constructor of PrototxtPrinter
+   * \param options the options for printer.
    */
-  explicit PrototxtPrinter(const std::string& options = "", size_t indent = 0)
-      : MSCBasePrinter(options, indent) {}
+  explicit PrototxtPrinter(const std::string& options = "") : MSCBasePrinter(options) {}
 
   /*!
    * \brief Change object to LiteralDoc
@@ -81,9 +79,7 @@ class PrototxtPrinter : public MSCBasePrinter {
   void AppendPair(const String& key, const ObjectRef& value);
 
  protected:
-  /*!
-   * \brief Print a DictDoc to prototxt format
-   */
+  /*! * \brief Print a DictDoc to prototxt format*/
   void PrintTypedDoc(const DictDoc& doc) final;
 };
 

@@ -56,10 +56,18 @@ MSCGraph RelaxGraphBuilder::Build(const relax::Function& func) {
     for (size_t i = 0; i < input_names.size(); i++) {
       graph->FindTensor(input_names[i])->alias = config_.input_aliass[i];
     }
+  } else {
+    for (size_t i = 0; i < input_names.size(); i++) {
+      graph->FindTensor(input_names[i])->alias = graph->FindProducer(input_names[i])->name;
+    }
   }
   if (config_.output_aliass.size() == output_names.size()) {
     for (size_t i = 0; i < output_names.size(); i++) {
       graph->FindTensor(output_names[i])->alias = config_.output_aliass[i];
+    }
+  } else {
+    for (size_t i = 0; i < output_names.size(); i++) {
+      graph->FindTensor(output_names[i])->alias = StringUtils::Replace(output_names[i], ":", "_");
     }
   }
   return graph;
@@ -71,7 +79,7 @@ MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>& bind
   const auto& master_name = SpanUtils::GetAttr(expr->span, "master");
   String optype;
   if (const auto* var = expr.as<relax::VarNode>()) {
-    optype = var->name_hint();
+    optype = "input";
   } else if (expr.as<relax::ConstantNode>()) {
     optype = "constant";
   } else if (const auto* call_node = expr.as<relax::CallNode>()) {

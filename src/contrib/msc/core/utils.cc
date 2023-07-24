@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file utils.cc
+ * \file src/contrib/msc/core/utils.cc
  */
 #include "utils.h"
 
@@ -37,7 +37,7 @@ size_t CommonUtils::GetIndex(int index, size_t max_size) {
   return v_index;
 }
 
-Array<String> StringUtils::Split(const String& src_string, const String& sep) {
+const Array<String> StringUtils::Split(const String& src_string, const String& sep) {
   Array<String> sub_strings;
   if (src_string.size() == 0) {
     return sub_strings;
@@ -47,14 +47,14 @@ Array<String> StringUtils::Split(const String& src_string, const String& sep) {
   int pos = src_cstring.find(csep);
   while (pos > 0) {
     sub_strings.push_back(src_cstring.substr(0, pos));
-    src_cstring = src_cstring.substr(pos + csep.size() + 1);
+    src_cstring = src_cstring.substr(pos + csep.size());
     pos = src_cstring.find(csep);
   }
   sub_strings.push_back(src_cstring);
   return sub_strings;
 }
 
-String StringUtils::Join(const Array<String>& sub_strings, const String& joint) {
+const String StringUtils::Join(const Array<String>& sub_strings, const String& joint) {
   String join_str = "";
   for (size_t i = 0; i < sub_strings.size(); i++) {
     join_str = join_str + sub_strings[i] + (i == sub_strings.size() - 1 ? "" : joint);
@@ -62,17 +62,18 @@ String StringUtils::Join(const Array<String>& sub_strings, const String& joint) 
   return join_str;
 }
 
-String StringUtils::Replace(const String& src_string, const String& old_str,
-                            const String& new_str) {
+const String StringUtils::Replace(const String& src_string, const String& old_str,
+                                  const String& new_str) {
   String new_string;
-  for (const auto& sub_s : Split(src_string, old_str)) {
-    new_string = new_string + sub_s + new_str;
+  const auto& sub_strings = Split(src_string, old_str);
+  for (size_t i = 0; i < sub_strings.size(); i++) {
+    new_string = new_string + sub_strings[i] + (i == sub_strings.size() - 1 ? "" : new_str);
   }
   return new_string;
 }
 
-std::tuple<String, String> StringUtils::SplitOnce(const String& src_string, const String& sep,
-                                                  bool from_left) {
+const std::tuple<String, String> StringUtils::SplitOnce(const String& src_string, const String& sep,
+                                                        bool from_left) {
   if (src_string.size() == 0) {
     return std::make_tuple(String(), String());
   }
@@ -85,8 +86,8 @@ std::tuple<String, String> StringUtils::SplitOnce(const String& src_string, cons
   return std::make_tuple(String(), String());
 }
 
-Array<String> StringUtils::GetClosures(const String& src_string, const String& left,
-                                       const String& right) {
+const Array<String> StringUtils::GetClosures(const String& src_string, const String& left,
+                                             const String& right) {
   Array<String> tokens;
   if (src_string.size() == 0) {
     return tokens;
@@ -107,8 +108,8 @@ Array<String> StringUtils::GetClosures(const String& src_string, const String& l
   return tokens;
 }
 
-String StringUtils::GetClosureOnce(const String& src_string, const String& left,
-                                   const String& right, bool from_left) {
+const String StringUtils::GetClosureOnce(const String& src_string, const String& left,
+                                         const String& right, bool from_left) {
   if (src_string.size() == 0) {
     return "";
   }
@@ -119,7 +120,7 @@ String StringUtils::GetClosureOnce(const String& src_string, const String& left,
   return val;
 }
 
-String StringUtils::ToString(const runtime::ObjectRef& obj) {
+const String StringUtils::ToString(const runtime::ObjectRef& obj) {
   String obj_string;
   if (obj.as<StringObj>()) {
     obj_string = Downcast<String>(obj);
@@ -142,7 +143,7 @@ String StringUtils::ToString(const runtime::ObjectRef& obj) {
   return obj_string;
 }
 
-Span SpanUtils::SetAttr(const Span& span, const String& key, const String& value) {
+const Span SpanUtils::SetAttr(const Span& span, const String& key, const String& value) {
   if (value.size() == 0) {
     return span;
   }
@@ -167,7 +168,7 @@ Span SpanUtils::SetAttr(const Span& span, const String& key, const String& value
   return Span(SourceName::Get(new_source), 0, 0, 0, 0);
 }
 
-String SpanUtils::GetAttr(const Span& span, const String& key) {
+const String SpanUtils::GetAttr(const Span& span, const String& key) {
   if (span.defined() && span->source_name.defined()) {
     Array<String> tokens{"<" + key + ">", "</" + key + ">"};
     return StringUtils::GetClosureOnce(span->source_name->name, tokens[0], tokens[1]);
@@ -175,7 +176,7 @@ String SpanUtils::GetAttr(const Span& span, const String& key) {
   return "";
 }
 
-Map<String, String> SpanUtils::GetAttrs(const Span& span) {
+const Map<String, String> SpanUtils::GetAttrs(const Span& span) {
   Map<String, String> attrs;
   for (const auto& key : StringUtils::GetClosures(span->source_name->name, "</", ">")) {
     attrs.Set(key, GetAttr(span, key));
@@ -183,11 +184,7 @@ Map<String, String> SpanUtils::GetAttrs(const Span& span) {
   return attrs;
 }
 
-TVM_REGISTER_GLOBAL("msc.core.SpanGetAttr").set_body_typed(SpanUtils::GetAttr);
-
-TVM_REGISTER_GLOBAL("msc.core.SpanGetAttrs").set_body_typed(SpanUtils::GetAttrs);
-
-Array<String> ExprUtils::GetInputTypes(const String& optype) {
+const Array<String> ExprUtils::GetInputTypes(const String& optype) {
   Array<String> input_types;
   if (optype == "relax.nn.conv1d" || optype == "relax.nn.conv2d" || optype == "relax.nn.conv3d" ||
       optype == "relax.nn.dense") {
@@ -207,7 +204,7 @@ Array<String> ExprUtils::GetInputTypes(const String& optype) {
   return input_types;
 }
 
-Array<String> ExprUtils::GetInputTypes(const RelaxCall& call) {
+const Array<String> ExprUtils::GetInputTypes(const RelaxCall& call) {
   const String& optype = Downcast<Op>(call->op)->name;
   Array<String> input_types = GetInputTypes(optype);
   if (input_types.size() == 0) {
@@ -219,7 +216,7 @@ Array<String> ExprUtils::GetInputTypes(const RelaxCall& call) {
   return input_types;
 }
 
-Array<String> ExprUtils::GetInputTypes(const RelayCall& call) {
+const Array<String> ExprUtils::GetInputTypes(const RelayCall& call) {
   const String& optype = Downcast<Op>(call->op)->name;
   Array<String> input_types = GetInputTypes(optype);
   if (input_types.size() == 0) {
@@ -230,6 +227,10 @@ Array<String> ExprUtils::GetInputTypes(const RelayCall& call) {
   ICHECK_EQ(input_types.size(), call->args.size()) << "Input types and args size mismatch";
   return input_types;
 }
+
+TVM_REGISTER_GLOBAL("msc.core.SpanGetAttr").set_body_typed(SpanUtils::GetAttr);
+
+TVM_REGISTER_GLOBAL("msc.core.SpanGetAttrs").set_body_typed(SpanUtils::GetAttrs);
 
 }  // namespace msc
 }  // namespace contrib

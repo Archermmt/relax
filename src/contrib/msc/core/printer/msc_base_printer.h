@@ -35,15 +35,23 @@ namespace msc {
 
 using namespace tvm::script::printer;
 
+/*!
+ * \brief MSCPrinterConfig is base for config class in MSC
+ * \sa Doc
+ */
+
 struct MSCPrinterConfig {
-  std::string space{"  "};
+  size_t indent{0};
+  std::string indent_space{"  "};
   std::string separator{", "};
   void Load(dmlc::JSONReader* reader) {
     std::string key;
     reader->BeginObject();
     while (reader->NextObjectItem(&key)) {
-      if (key == "space") {
-        reader->Read(&space);
+      if (key == "indent") {
+        reader->Read(&indent);
+      } else if (key == "indent_space") {
+        reader->Read(&indent_space);
       } else if (key == "separator") {
         reader->Read(&separator);
       } else {
@@ -54,28 +62,22 @@ struct MSCPrinterConfig {
 };
 
 /*!
- * \brief BasePrinterConfig is base for config class in MSC
- * \sa Doc
- */
-
-/*!
  * \brief MSCBasePrinter is responsible for printing Doc tree into text format
  * \sa Doc
  */
 class MSCBasePrinter {
  public:
   /*!
-   * \brief The constructor of DocPrinter
-   * \param options the options for the printer.
-   * \param indent the start indent.
+   * \brief The constructor of MSCBasePrinter
+   * \param options the options for printer.
    */
-  explicit MSCBasePrinter(const std::string& options = "", size_t indent = 0) {
-    indent_ = indent;
+  explicit MSCBasePrinter(const std::string& options = "") {
     if (options.size() > 0) {
       std::istringstream is(options);
       dmlc::JSONReader reader(&is);
       reader.Read(&config_);
     }
+    indent_ = config_.indent;
   }
 
   virtual ~MSCBasePrinter() = default;
@@ -84,7 +86,7 @@ class MSCBasePrinter {
    * \brief Append a doc into the final content
    * \sa GetString
    */
-  void Append(const Doc& doc) { PrintDoc(doc); }
+  void Append(const Doc& doc, bool new_line = true) { PrintDoc(doc, new_line); }
 
   /*!
    * \brief Get the printed string of all Doc appended
@@ -93,264 +95,129 @@ class MSCBasePrinter {
   String GetString() const { return output_.str(); }
 
  protected:
-  /*!
-   * \brief Get the printed string
-   * \sa PrintTypedDoc
-   */
-  void PrintDoc(const Doc& doc) {
-    if (auto doc_node = doc.as<LiteralDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<IdDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<AttrAccessDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<IndexDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<CallDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<ListDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<TupleDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<DictDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<SliceDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<AssignDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<IfDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<WhileDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<ForDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<ScopeDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<AssertDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<ReturnDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<FunctionDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<ClassDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else if (auto doc_node = doc.as<CommentDoc>()) {
-      PrintTypedDoc(doc_node.value());
-    } else {
-      LOG(FATAL) << "Do not know how to print " << doc->GetTypeKey();
-    }
-  }
-
+  /*! \brief Print docs to joined doc */
   template <typename DocType>
-  void PrintJoinedDocs(const Array<DocType>& docs) {
+  void PrintJoinedDocs(const Array<DocType>& docs, const String& separator = ", ") {
     for (size_t i = 0; i < docs.size(); i++) {
-      PrintDoc(docs[i]);
-      output_ << (i == docs.size() - 1 ? "" : config_.separator);
+      PrintDoc(docs[i], false);
+      output_ << (i == docs.size() - 1 ? "" : separator);
     }
   }
 
-  /*!
-   * \brief Virtual method to print a LiteralDoc
-   */
-  virtual void PrintTypedDoc(const LiteralDoc& doc) {
-    const ObjectRef& value = doc->value;
-    if (!value.defined()) {
-      output_ << "\"\"";
-    } else if (const auto* int_imm = value.as<IntImmNode>()) {
-      output_ << int_imm->value;
-    } else if (const auto* float_imm = value.as<FloatImmNode>()) {
-      // TODO(yelite): Make float number printing roundtrippable
-      output_.precision(17);
-      if (std::isinf(float_imm->value) || std::isnan(float_imm->value)) {
-        output_ << '"' << float_imm->value << '"';
-      } else {
-        output_ << float_imm->value;
-      }
-    } else if (const auto* string_obj = value.as<StringObj>()) {
-      output_ << "\"" << tvm::support::StrEscape(string_obj->data, string_obj->size) << "\"";
-    } else {
-      LOG(FATAL) << "TypeError: Unsupported literal value type: " << value->GetTypeKey();
-    }
-  }
+  /*! \brief Print comment for stmt*/
+  virtual void MaybePrintComment(const StmtDoc& stmt, bool multi_lines = false);
 
-  /*!
-   * \brief Virtual method to print an IdDoc
-   */
-  virtual void PrintTypedDoc(const IdDoc& doc) { output_ << doc->name; }
+  /*! \brief Print doc*/
+  void PrintDoc(const Doc& doc, bool new_line = true);
 
-  /*!
-   * \brief Virtual method to print an IndexDoc
-   */
-  virtual void PrintTypedDoc(const IndexDoc& doc) {
-    PrintDoc(doc->value);
-    if (doc->indices.size() == 0) {
-      output_ << "[()]";
-    } else {
-      for (size_t i = 0; i < doc->indices.size(); i++) {
-        if (i == 0) {
-          output_ << "[";
-        }
-        PrintDoc(doc);
-        output_ << (i == doc->indices.size() - 1 ? "]" : config_.separator);
-      }
-    }
-  }
+  /*! \brief Virtual method to print a LiteralDoc*/
+  virtual void PrintTypedDoc(const LiteralDoc& doc);
 
-  /*!
-   * \brief Virtual method to print a CallDoc
-   */
-  virtual void PrintTypedDoc(const CallDoc& doc) {
-    PrintDoc(doc->callee);
-    output_ << "(";
-    PrintJoinedDocs(doc->args);
-    ICHECK_EQ(doc->kwargs_keys.size(), doc->kwargs_values.size())
-        << "CallDoc should have equal number of elements in kwargs_keys and kwargs_values.";
-    if (doc->args.size() > 0 && doc->kwargs_keys.size() > 0) {
-      output_ << config_.separator;
-    }
-    for (size_t i = 0; i < doc->kwargs_keys.size(); i++) {
-      output_ << doc->kwargs_keys[i] << "=";
-      PrintDoc(doc->kwargs_values[i]);
-      output_ << (i == doc->kwargs_keys.size() - 1 ? "" : config_.separator);
-    }
-    output_ << ")";
-  }
+  /*! \brief Virtual method to print an IdDoc*/
+  virtual void PrintTypedDoc(const IdDoc& doc);
 
-  /*!
-   * \brief Virtual method to print a ListDoc
-   */
-  virtual void PrintTypedDoc(const ListDoc& doc) {
-    output_ << "[";
-    PrintJoinedDocs(doc->elements);
-    output_ << "]";
-  }
+  /*! \brief Virtual method to print an IndexDoc*/
+  virtual void PrintTypedDoc(const IndexDoc& doc);
 
-  /*!
-   * \brief Virtual method to print a TupleDoc
-   */
-  virtual void PrintTypedDoc(const TupleDoc& doc) {
-    output_ << "(";
-    if (doc->elements.size() == 1) {
-      PrintDoc(doc->elements[0]);
-      output_ << ",";
-    } else {
-      PrintJoinedDocs(doc->elements);
-    }
-    output_ << ")";
-  }
+  /*! \brief Virtual method to print a ListDoc*/
+  virtual void PrintTypedDoc(const ListDoc& doc);
 
-  /*!
-   * \brief Virtual method to print a ReturnDoc
-   */
-  virtual void PrintTypedDoc(const ReturnDoc& doc) {
-    output_ << "return ";
-    PrintDoc(doc->value);
-  }
+  /*! \brief Virtual method to print a TupleDoc*/
+  virtual void PrintTypedDoc(const TupleDoc& doc);
 
-  /*!
-   * \brief Virtual method to print an AttrAccessDoc
-   */
+  /*! \brief Virtual method to print a ReturnDoc*/
+  virtual void PrintTypedDoc(const ReturnDoc& doc);
+
+  /*! \brief Virtual method to print a StmtBlockDoc*/
+  virtual void PrintTypedDoc(const StmtBlockDoc& doc);
+
+  /*! \brief Virtual method to print a ExprStmtDoc*/
+  virtual void PrintTypedDoc(const ExprStmtDoc& doc);
+
+  /*! \brief Virtual method to print a CallDoc*/
+  virtual void PrintTypedDoc(const CallDoc& doc) { LOG(FATAL) << "Call is not implemented"; }
+
+  /*! \brief Virtual method to print an AttrAccessDoc*/
   virtual void PrintTypedDoc(const AttrAccessDoc& doc) {
-    LOG(FATAL) << "AttrAccessDoc is not implemented";
+    LOG(FATAL) << "AttrAccess is not implemented";
   }
 
-  /*!
-   * \brief Virtual method to print a DictDoc
-   */
-  virtual void PrintTypedDoc(const DictDoc& doc) { LOG(FATAL) << "DictDoc is not implemented"; }
+  /*! \brief Virtual method to print a DictDoc*/
+  virtual void PrintTypedDoc(const DictDoc& doc) { LOG(FATAL) << "Dict is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print a SliceDoc
-   */
-  virtual void PrintTypedDoc(const SliceDoc& doc) { LOG(FATAL) << "SliceDoc is not implemented"; }
+  /*! \brief Virtual method to print a SliceDoc*/
+  virtual void PrintTypedDoc(const SliceDoc& doc) { LOG(FATAL) << "Slice is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print an AssignDoc
-   */
-  virtual void PrintTypedDoc(const AssignDoc& doc) { LOG(FATAL) << "AssignDoc is not implemented"; }
+  /*! \brief Virtual method to print an AssignDoc*/
+  virtual void PrintTypedDoc(const AssignDoc& doc) { LOG(FATAL) << "Assign is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print an IfDoc
-   */
-  virtual void PrintTypedDoc(const IfDoc& doc) { LOG(FATAL) << "IfDoc is not implemented"; }
+  /*! \brief Virtual method to print an IfDoc*/
+  virtual void PrintTypedDoc(const IfDoc& doc) { LOG(FATAL) << "If is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print a WhileDoc
-   */
-  virtual void PrintTypedDoc(const WhileDoc& doc) { LOG(FATAL) << "WhileDoc is not implemented"; }
+  /*! \brief Virtual method to print a WhileDoc*/
+  virtual void PrintTypedDoc(const WhileDoc& doc) { LOG(FATAL) << "While is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print a ForDoc
-   */
-  virtual void PrintTypedDoc(const ForDoc& doc) { LOG(FATAL) << "ForDoc is not implemented"; }
+  /*! \brief Virtual method to print a ForDoc*/
+  virtual void PrintTypedDoc(const ForDoc& doc) { LOG(FATAL) << "For is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print a ScopeDoc
-   */
-  virtual void PrintTypedDoc(const ScopeDoc& doc) { LOG(FATAL) << "ScopeDoc is not implemented"; }
+  /*! \brief Virtual method to print a ScopeDoc*/
+  virtual void PrintTypedDoc(const ScopeDoc& doc) { LOG(FATAL) << "Scope is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print an AssertDoc
-   */
-  virtual void PrintTypedDoc(const AssertDoc& doc) { LOG(FATAL) << "AssertDoc is not implemented"; }
+  /*! \brief Virtual method to print an AssertDoc*/
+  virtual void PrintTypedDoc(const AssertDoc& doc) { LOG(FATAL) << "Assert is not implemented"; }
 
-  /*!
-   * \brief Virtual method to print a FunctionDoc
-   */
+  /*! \brief Virtual method to print a FunctionDoc*/
   virtual void PrintTypedDoc(const FunctionDoc& doc) {
-    LOG(FATAL) << "FunctionDoc is not implemented";
+    LOG(FATAL) << "Function is not implemented";
   }
 
-  /*!
-   * \brief Virtual method to print a ClassDoc
-   */
-  virtual void PrintTypedDoc(const ClassDoc& doc) { LOG(FATAL) << "ClassDoc is not implemented"; }
+  /*! \brief Virtual method to print a ClassDoc*/
+  virtual void PrintTypedDoc(const ClassDoc& doc) { LOG(FATAL) << "Class is not implemented"; }
+
+  /*! \brief Virtual method to print a CommentDoc*/
+  virtual void PrintTypedDoc(const CommentDoc& doc) { LOG(FATAL) << "Comment is not implemented"; }
 
   /*!
-   * \brief Virtual method to print a CommentDoc
-   */
-  virtual void PrintTypedDoc(const CommentDoc& doc) {
-    LOG(FATAL) << "CommentDoc is not implemented";
-  }
-
-  /*!
-   * \brief Start the line into the output stream.
+   * \brief Start line into the output stream.
    * \sa output_
    */
-  void StartLine() {
-    for (size_t i = 0; i < indent_; i++) {
-      output_ << config_.space;
+  std::ostream& NewLine(bool with_indent = true) {
+    if (lines_ > 0) {
+      output_ << "\n";
     }
+    if (with_indent) {
+      for (size_t i = 0; i < indent_; i++) {
+        output_ << config_.indent_space;
+      }
+    }
+    return output_;
   }
 
-  /*!
-   * \brief Add a new line into the output stream.
-   * \sa output_
-   */
-  void NewLine() { output_ << "\n"; }
-
-  /*!
-   * \brief Increase the indent level
-   */
+  /*! \brief Increase the indent level*/
   void IncreaseIndent() { indent_ += 1; }
 
-  /*!
-   * \brief Decrease the indent level
-   */
+  /*! \brief Decrease the indent level*/
   void DecreaseIndent() {
     if (indent_ >= 1) {
       indent_ -= 1;
     }
   }
 
+  /*! \brief Get the output stream*/
+  const MSCPrinterConfig config() { return config_; }
+
   /*! \brief The output stream of printer*/
   std::ostringstream output_;
-  /*! \brief the config for printer */
-  MSCPrinterConfig config_;
 
  private:
-  /*! \brief the current level of indent */
+  /*! \brief The current level of indent */
   size_t indent_ = 0;
+
+  /*! \brief The lines num */
+  size_t lines_ = 0;
+
+  /*! \brief The config for printer */
+  MSCPrinterConfig config_;
 };
 
 }  // namespace msc

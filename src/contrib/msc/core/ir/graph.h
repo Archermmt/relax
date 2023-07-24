@@ -44,21 +44,14 @@ struct JsonMSCTensor {
   std::string layout;
   std::vector<int64_t> shape;
 
-  const std::string Export() const {
-    std::ostringstream os;
-    dmlc::JSONWriter writer(&os);
-    writer.BeginObject();
-    Save(&writer);
-    writer.EndObject();
-    return os.str();
-  }
-
   void Save(dmlc::JSONWriter* writer) const {
+    writer->BeginObject();
     writer->WriteObjectKeyValue("name", name);
     writer->WriteObjectKeyValue("alias", alias);
     writer->WriteObjectKeyValue("dtype", dtype);
     writer->WriteObjectKeyValue("layout", layout);
     writer->WriteObjectKeyValue("shape", shape);
+    writer->EndObject();
   }
 
   void Load(dmlc::JSONReader* reader) {
@@ -98,20 +91,12 @@ struct JsonMSCJoint {
   std::vector<std::string> scope;
   std::vector<std::string> parents;
   std::vector<std::string> inputs;
-  std::vector<std::string> outputs;
+  std::vector<JsonMSCTensor> outputs;
   std::unordered_map<std::string, std::string> attrs;
-  std::unordered_map<std::string, std::string> weights;
-
-  const std::string Export() const {
-    std::ostringstream os;
-    dmlc::JSONWriter writer(&os);
-    writer.BeginObject();
-    Save(&writer);
-    writer.EndObject();
-    return os.str();
-  }
+  std::unordered_map<std::string, JsonMSCTensor> weights;
 
   void Save(dmlc::JSONWriter* writer) const {
+    writer->BeginObject();
     writer->WriteObjectKeyValue("index", index);
     writer->WriteObjectKeyValue("name", name);
     writer->WriteObjectKeyValue("master", master);
@@ -121,6 +106,7 @@ struct JsonMSCJoint {
     writer->WriteObjectKeyValue("outputs", outputs);
     writer->WriteObjectKeyValue("attrs", attrs);
     writer->WriteObjectKeyValue("weights", weights);
+    writer->EndObject();
   }
 
   void Load(dmlc::JSONReader* reader) {
@@ -145,7 +131,7 @@ struct JsonMSCJoint {
         reader->Read(&inputs);
       } else if (key == "outputs") {
         reader->Read(&outputs);
-        bitmask |= 4;
+        bitmask |= 8;
       } else if (key == "attrs") {
         reader->Read(&attrs);
       } else if (key == "weights") {
@@ -161,26 +147,19 @@ struct JsonMSCJoint {
  *  MSCGraph is core of MSC.
  *  MSCGraph contains MSCJoints as nodes and MSCTensors as edges.
  */
-struct JsonMSCGarph {
+struct JsonMSCGraph {
   std::string name;
   std::vector<std::string> inputs;
   std::vector<std::string> outputs;
-  std::vector<std::string> nodes;
-
-  const std::string Export() const {
-    std::ostringstream os;
-    dmlc::JSONWriter writer(&os);
-    writer.BeginObject();
-    Save(&writer);
-    writer.EndObject();
-    return os.str();
-  }
+  std::vector<JsonMSCJoint> nodes;
 
   void Save(dmlc::JSONWriter* writer) const {
+    writer->BeginObject();
     writer->WriteObjectKeyValue("name", name);
     writer->WriteObjectKeyValue("inputs", inputs);
     writer->WriteObjectKeyValue("outputs", outputs);
     writer->WriteObjectKeyValue("nodes", nodes);
+    writer->EndObject();
   }
 
   void Load(dmlc::JSONReader* reader) {
@@ -222,8 +201,10 @@ class MSCTensorNode : public Object {
   /*! \brief The shape of tensor. */
   Array<Integer> shape;
   /*! \brief Export tensor to json. */
-  const String ToJson() const;
-  /*! \brief Load tensor from json. */
+  const JsonMSCTensor ToJson() const;
+  /*! \brief Load tensor from json struct. */
+  void FromJson(const JsonMSCTensor& j_tensor);
+  /*! \brief Load tensor from json string. */
   void FromJson(const std::string& json_str);
   /*! \brief Get the ndim of tensor. */
   size_t Ndim() const;
@@ -276,6 +257,12 @@ class MSCTensor : public ObjectRef {
    */
   TVM_DLL MSCTensor(const String& name, const DataType& dtype, const String& layout,
                     const Array<Integer>& shape, const String& alias = "");
+
+  /*!
+   * \brief The json constructor.
+   * \param j_tensor The json describe of the tensor.
+   */
+  TVM_DLL MSCTensor(const JsonMSCTensor& j_tensor);
 
   /*!
    * \brief The json constructor.
@@ -349,19 +336,29 @@ class MSCJointNode : public BaseJointNode {
   /*! \brief The weights of node. */
   Map<String, MSCTensor> weights;
   /*! \brief Export node to json. */
-  const String ToJson() const;
-  /*! \brief Load node from json. */
+  const JsonMSCJoint ToJson() const;
+  /*! \brief Load node from json struct. */
+  void FromJson(const JsonMSCJoint& j_joint, const Map<String, BaseJoint>& nodes);
+  /*! \brief Load node from json string. */
   void FromJson(const std::string& json_str, const Map<String, BaseJoint>& nodes);
   /*! \brief Get input from the node. */
   const MSCTensor InputAt(int index) const;
+  /*! \brief Get inputs from the node. */
+  const Array<MSCTensor> GetInputs() const;
   /*! \brief Get output from the node. */
   const MSCTensor OutputAt(int index) const;
+  /*! \brief Get outputs from the node. */
+  const Array<MSCTensor> GetOutputs() const;
   /*! \brief Get weight from the node. */
   const MSCTensor WeightAt(const String& wtype) const;
-  /*! \brief Get Producer from the node. */
+  /*! \brief Get Producer of the input. */
   const MSCJoint ProducerOf(int index) const;
   const MSCJoint ProducerOf(const String& input_name) const;
   const MSCJoint ProducerOf(const MSCTensor& input) const;
+  /*! \brief Get Producer and out index of the input. */
+  const std::pair<MSCJoint, size_t> ProducerAndIdxOf(int index) const;
+  const std::pair<MSCJoint, size_t> ProducerAndIdxOf(const String& name) const;
+  const std::pair<MSCJoint, size_t> ProducerAndIdxOf(const MSCTensor& input) const;
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("index", &index);
@@ -423,6 +420,12 @@ class MSCJoint : public BaseJoint {
                    const Map<String, String>& attrs, const Array<String>& scope,
                    const std::vector<std::pair<BaseJoint, size_t>>& inputs,
                    const Array<MSCTensor>& outputs, const Map<String, MSCTensor>& weights);
+
+  /*!
+   * \brief The json constructor.
+   * \param j_joint The json describe of the node.
+   */
+  TVM_DLL MSCJoint(const JsonMSCJoint& j_joint, const Map<String, BaseJoint>& nodes);
 
   /*!
    * \brief The json constructor.
@@ -552,8 +555,10 @@ class MSCGraphNode : public BaseGraphNode {
   /*! \brief The weights in graph, get by AnalysisGraph. */
   Map<String, Array<String>> weight_holders;
   /*! \brief Export graph to json. */
-  const String ToJson() const;
+  const JsonMSCGraph ToJson() const;
   /*! \brief Load graph from json. */
+  void FromJson(const JsonMSCGraph& json_str);
+  /*! \brief Load graph from json string. */
   void FromJson(const std::string& json_str);
   /*! \brief Export graph to prototxt. */
   const String ToPrototxt() const;
@@ -561,8 +566,12 @@ class MSCGraphNode : public BaseGraphNode {
   const MSCJoint FindNode(const String& name) const;
   /*! \brief Get input from the graph. */
   const MSCTensor InputAt(int index) const;
+  /*! \brief Get inputs from the graph. */
+  const Array<MSCTensor> GetInputs() const;
   /*! \brief Get output from the graph. */
   const MSCTensor OutputAt(int index) const;
+  /*! \brief Get outputs from the graph. */
+  const Array<MSCTensor> GetOutputs() const;
   /*! \brief Find tensor from the graph. */
   const MSCTensor FindTensor(const String& name) const;
   /*! \brief Find producer of tensor from the graph. */
@@ -630,6 +639,12 @@ class MSCGraph : public BaseGraph {
    */
   TVM_DLL MSCGraph(const String& name, const Array<MSCJoint>& nodes,
                    const Array<String>& input_names, const Array<String>& output_names);
+
+  /*!
+   * \brief The json constructor.
+   * \param j_graph The json describe of the graph.
+   */
+  TVM_DLL MSCGraph(const JsonMSCGraph& j_graph);
 
   /*!
    * \brief The json constructor.

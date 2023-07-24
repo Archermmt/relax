@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file utils.h
+ * \file src/contrib/msc/core/utils.h
  * \brief Common utilities for msc.
  */
 #ifndef TVM_CONTRIB_MSC_CORE_UTILS_H_
@@ -54,47 +54,48 @@ class StringUtils {
    * \brief Split the String into sub Strings.
    * \return The SubStrings.
    */
-  TVM_DLL static Array<String> Split(const String& src_string, const String& sep);
+  TVM_DLL static const Array<String> Split(const String& src_string, const String& sep);
 
   /*!
    * \brief Join the SubStrings into String.
    * \return The String.
    */
-  TVM_DLL static String Join(const Array<String>& sub_strings, const String& joint);
+  TVM_DLL static const String Join(const Array<String>& sub_strings, const String& joint);
 
   /*!
    * \brief Replace the substring ole to new in String.
    * \return The replaced String.
    */
-  TVM_DLL static String Replace(const String& src_string, const String& old_str,
-                                const String& new_str);
+  TVM_DLL static const String Replace(const String& src_string, const String& old_str,
+                                      const String& new_str);
 
   /*!
    * \brief Split the String into two sub Strings, only split by the frist seq.
    * \return The SubStrings.
    */
-  TVM_DLL static std::tuple<String, String> SplitOnce(const String& src_string, const String& sep,
-                                                      bool from_left = true);
+  TVM_DLL static const std::tuple<String, String> SplitOnce(const String& src_string,
+                                                            const String& sep,
+                                                            bool from_left = true);
 
   /*!
    * \brief Get the tokens between left and right.
    * \return The Tokens.
    */
-  TVM_DLL static Array<String> GetClosures(const String& src_string, const String& left,
-                                           const String& right);
+  TVM_DLL static const Array<String> GetClosures(const String& src_string, const String& left,
+                                                 const String& right);
 
   /*!
    * \brief Get the first token between left and right.
    * \return The Token.
    */
-  TVM_DLL static String GetClosureOnce(const String& src_string, const String& left,
-                                       const String& right, bool from_left = true);
+  TVM_DLL static const String GetClosureOnce(const String& src_string, const String& left,
+                                             const String& right, bool from_left = true);
 
   /*!
    * \brief Change Object to String.
    * \return The String.
    */
-  TVM_DLL static String ToString(const runtime::ObjectRef& obj);
+  TVM_DLL static const String ToString(const runtime::ObjectRef& obj);
 };
 
 /*!
@@ -106,19 +107,19 @@ class SpanUtils {
    * \brief Set <key>value</key> to the Span.
    * \return The new Span.
    */
-  TVM_DLL static Span SetAttr(const Span& span, const String& key, const String& value);
+  TVM_DLL static const Span SetAttr(const Span& span, const String& key, const String& value);
 
   /*!
    * \brief Get the value in <key>value</key> from the Span.
    * \return The value String.
    */
-  TVM_DLL static String GetAttr(const Span& span, const String& key);
+  TVM_DLL static const String GetAttr(const Span& span, const String& key);
 
   /*!
    * \brief Get all the key:value in format <key>value</key> from the Span.
    * \return The Attrs Map.
    */
-  TVM_DLL static Map<String, String> GetAttrs(const Span& span);
+  TVM_DLL static const Map<String, String> GetAttrs(const Span& span);
 };
 
 /*!
@@ -130,19 +131,19 @@ class ExprUtils {
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static Array<String> GetInputTypes(const String& optype);
+  TVM_DLL static const Array<String> GetInputTypes(const String& optype);
 
   /*!
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static Array<String> GetInputTypes(const RelaxCall& call);
+  TVM_DLL static const Array<String> GetInputTypes(const RelaxCall& call);
 
   /*!
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static Array<String> GetInputTypes(const RelayCall& call);
+  TVM_DLL static const Array<String> GetInputTypes(const RelayCall& call);
 };
 
 }  // namespace msc

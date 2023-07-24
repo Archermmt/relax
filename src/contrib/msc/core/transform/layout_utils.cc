@@ -57,7 +57,7 @@ bool LayoutUtils::SetLayout(const Expr& expr, const NLayout& layout) {
   return true;
 }
 
-NLayout LayoutUtils::GetNLayout(const Expr& expr) {
+const NLayout LayoutUtils::GetNLayout(const Expr& expr) {
   if (!LayoutInfered(expr)) {
     return LayoutDecision("");
   }
@@ -76,7 +76,7 @@ NLayout LayoutUtils::GetNLayout(const Expr& expr) {
   return LayoutDecision("");
 }
 
-LayoutDecision LayoutUtils::GetLayoutDecision(const Expr& expr) {
+const LayoutDecision LayoutUtils::GetLayoutDecision(const Expr& expr) {
   NLayout nlayout = GetNLayout(expr);
   ICHECK(nlayout.IsLeaf()) << "Cannot get layout for " << expr;
   return nlayout.LeafValue();
@@ -102,8 +102,8 @@ bool LayoutUtils::HasUnknownDimTensor(const Array<Expr>& args) {
   return false;
 }
 
-LayoutDecision LayoutUtils::ExpandLayout(const LayoutDecision& src_layout,
-                                         const std::vector<size_t>& expand_axes) {
+const LayoutDecision LayoutUtils::ExpandLayout(const LayoutDecision& src_layout,
+                                               const std::vector<size_t>& expand_axes) {
   if (!src_layout->layout.defined()) {
     return src_layout;
   }
@@ -136,8 +136,8 @@ LayoutDecision LayoutUtils::ExpandLayout(const LayoutDecision& src_layout,
   return LayoutDecision(new_layout);
 }
 
-LayoutDecision LayoutUtils::ReduceLayout(const LayoutDecision& src_layout,
-                                         const std::vector<size_t>& reduce_axes) {
+const LayoutDecision LayoutUtils::ReduceLayout(const LayoutDecision& src_layout,
+                                               const std::vector<size_t>& reduce_axes) {
   if (!src_layout->layout.defined()) {
     return src_layout;
   }
