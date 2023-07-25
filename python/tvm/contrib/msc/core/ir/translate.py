@@ -72,7 +72,7 @@ def to_relax(
     weights: Optional[Dict[str, tvm.nd.array]] = None,
     codegen_config: Optional[Dict[str, str]] = None,
     print_config: Optional[Dict[str, str]] = None,
-    build_folder: str = None,
+    build_folder: msc_utils.MSCDirectory = None,
 ):
     """Change MSCGraph to IRModule.
 
@@ -98,5 +98,19 @@ def to_relax(
     func = tvm.get_global_func("msc.tvm.GetRelaxSources")
     assert func, "Can not find msc.tvm.GetRelaxSources, please build with MSC"
     sources = func(graph, msc_utils.dump_dict(codegen_config), msc_utils.dump_dict(print_config))
-    print("[TMINFO] get sources " + str(sources))
-    return graph
+    build_folder = build_folder or msc_utils.msc_dir(cleanup=False)
+    with build_folder as d:
+        for name, source in sources.items():
+            d.add_file(name, source)
+        inputs = [
+            tvm.relax.Var(i.alias, tvm.relax.TensorStructInfo(i.get_shape(), i.dtype_name))
+            for i in graph.get_inputs()
+        ]
+        builder = msc_utils.load_callable(graph.name + ".py:" + graph.name)
+        mod = builder(*inputs)
+        # load weights
+        if weights:
+            mod = BindParams("main", weights)(mod)
+            with open(d.relpath(graph.name + "_params.bin"), "wb") as f_params:
+                f_params.write(tvm.runtime.save_param_dict(weights))
+    return mod

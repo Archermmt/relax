@@ -925,6 +925,22 @@ TVM_REGISTER_GLOBAL("msc.core.MSCGraphFindConsumers")
       return graph->FindConsumers(name);
     });
 
+TVM_REGISTER_GLOBAL("msc.core.MSCGraphInputAt")
+    .set_body_typed([](const MSCGraph& graph, int index) -> MSCTensor {
+      return graph->InputAt(index);
+    });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCGraphOutputAt")
+    .set_body_typed([](const MSCGraph& graph, int index) -> MSCTensor {
+      return graph->OutputAt(index);
+    });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCGraphGetInputs")
+    .set_body_typed([](const MSCGraph& graph) -> Array<MSCTensor> { return graph->GetInputs(); });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCGraphGetOutputs")
+    .set_body_typed([](const MSCGraph& graph) -> Array<MSCTensor> { return graph->GetOutputs(); });
+
 TVM_REGISTER_GLOBAL("msc.core.MSCGraphToJson").set_body_typed([](const MSCGraph& graph) -> String {
   const auto& graph_json = graph->ToJson();
   std::ostringstream os;
@@ -938,6 +954,25 @@ TVM_REGISTER_GLOBAL("msc.core.MSCGraphFromJson")
 
 TVM_REGISTER_GLOBAL("msc.core.MSCGraphToPrototxt")
     .set_body_typed([](const MSCGraph& graph) -> String { return graph->ToPrototxt(); });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCJointInputAt")
+    .set_body_typed([](const MSCJoint& node, int index) -> MSCTensor {
+      return node->InputAt(index);
+    });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCJointOutputAt")
+    .set_body_typed([](const MSCJoint& node, int index) -> MSCTensor {
+      return node->OutputAt(index);
+    });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCJointGetInputs")
+    .set_body_typed([](const MSCJoint& node) -> Array<MSCTensor> { return node->GetInputs(); });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCJointGetOutputs")
+    .set_body_typed([](const MSCJoint& node) -> Array<MSCTensor> { return node->GetOutputs(); });
+
+TVM_REGISTER_GLOBAL("msc.core.MSCTensorDtypeName")
+    .set_body_typed([](const MSCTensor& tensor) -> String { return tensor->DtypeName(); });
 
 }  // namespace msc
 }  // namespace contrib

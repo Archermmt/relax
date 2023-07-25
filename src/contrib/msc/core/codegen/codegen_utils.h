@@ -35,6 +35,70 @@ namespace msc {
 
 using namespace tvm::script::printer;
 
+#define CODEGEN_CONFIG_MEMBERS             \
+  bool is_train{false};                    \
+  bool need_prune{false};                  \
+  bool need_quantize{false};               \
+  bool need_collect{false};                \
+  bool need_distill{false};                \
+  bool need_process{false};                \
+  bool need_test{true};                    \
+  std::string test_device{"cpu"};          \
+  std::string prefix{"res_"};              \
+  std::string baseline_folder{"baseline"}; \
+  std::string version;
+
+#define CODEGEN_CONFIG_PARSE                    \
+  if (key == "is_train") {                      \
+    reader->Read(&is_train);                    \
+  } else if (key == "need_prune") {             \
+    reader->Read(&need_prune);                  \
+    need_process |= need_prune;                 \
+  } else if (key == "need_quantize") {          \
+    reader->Read(&need_quantize);               \
+    need_process |= need_quantize;              \
+  } else if (key == "need_collect") {           \
+    reader->Read(&need_collect);                \
+    need_process |= need_collect;               \
+  } else if (key == "need_distill") {           \
+    reader->Read(&need_distill);                \
+    need_process |= need_distill;               \
+  } else if (key == "need_test") {              \
+    reader->Read(&need_test);                   \
+  } else if (key == "test_device") {            \
+    reader->Read(&test_device);                 \
+  } else if (key == "prefix") {                 \
+    reader->Read(&prefix);                      \
+  } else if (key == "version") {                \
+    reader->Read(&version);                     \
+  } else if (key == "baseline_folder") {        \
+    reader->Read(&baseline_folder);             \
+  } else {                                      \
+    LOG(FATAL) << "Do not support key " << key; \
+  }
+
+#define CODEGEN_METHODS                                                                            \
+  const String GetSuffix(bool as_raw = false) {                                                    \
+    const String& suffix = as_raw && config()->need_process ? "_raw" : "";                         \
+    return suffix;                                                                                 \
+  };                                                                                               \
+  virtual const String IdxNode(const MSCJoint& node, bool as_raw = true) {                         \
+    return CodeGenUtils::IdxNode(node, config()->prefix, GetSuffix(as_raw));                       \
+  };                                                                                               \
+  virtual const String IdxInput(const MSCJoint& node, int idx = 0, bool as_raw = false) {          \
+    return CodeGenUtils::IdxInput(node, config()->prefix, idx, GetSuffix(as_raw));                 \
+  };                                                                                               \
+  virtual const String IdxOutput(const MSCJoint& node, int idx = 0, bool as_raw = false) {         \
+    return CodeGenUtils::IdxOutput(node, config()->prefix, idx, GetSuffix(as_raw));                \
+  };                                                                                               \
+  virtual const String IdxWeight(const MSCJoint& node, const String& wtype, bool as_raw = false) { \
+    return CodeGenUtils::IdxWeight(node, wtype, GetSuffix(as_raw));                                \
+  };                                                                                               \
+  virtual const String DType(const DataType& dtype) { return runtime::DLDataType2String(dtype); }  \
+  virtual const String Comment(const MSCJoint& node) {                                             \
+    return CodeGenUtils::CommentNode(node, config()->prefix);                                      \
+  }
+
 /*!
  * \brief Utils for CodeGen.
  */

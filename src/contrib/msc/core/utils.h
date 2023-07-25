@@ -96,6 +96,13 @@ class StringUtils {
    * \return The String.
    */
   TVM_DLL static const String ToString(const runtime::ObjectRef& obj);
+
+  /*!
+   * \brief Compare String arrays.
+   * \return Whether two array are same.
+   */
+  TVM_DLL static bool CompareArrays(const Array<String>& left, const Array<String>& right,
+                                    int size = -1);
 };
 
 /*!

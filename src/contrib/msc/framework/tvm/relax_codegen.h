@@ -26,38 +26,11 @@
 
 #include "../../core/codegen/base_codegen.h"
 #include "../../core/codegen/py_codegen.h"
+#include "relax_opcode.h"
 
 namespace tvm {
 namespace contrib {
 namespace msc {
-
-/*!
- * \brief CodeGen config for relax
- */
-struct RelaxCodeDenConfig {
-  CODEGEN_CONFIG_MEMBERS
-  void Load(dmlc::JSONReader* reader) {
-    std::string key;
-    reader->BeginObject();
-    while (reader->NextObjectItem(&key)) {
-      CODEGEN_CONFIG_PARSE
-    }
-  }
-};
-
-/*!
- * \brief CodeGen for relax op
- */
-class RelaxOpCodeGen : BaseOpCodeGen<RelaxCodeDenConfig> {
- public:
-  /*!
-   * \brief The constructor of BaseOpDocsifier
-   * \param func_name the function name for the node.
-   * \param config the config json for the node.
-   */
-  explicit RelaxOpCodeGen(const String& func_name, const std::shared_ptr<RelaxCodeDenConfig> config)
-      : BaseOpCodeGen<RelaxCodeDenConfig>(func_name, config) {}
-};
 
 class RelaxGraphCodeGen : public PyGraphCodeGen<RelaxCodeDenConfig> {
  public:
@@ -80,8 +53,7 @@ class RelaxGraphCodeGen : public PyGraphCodeGen<RelaxCodeDenConfig> {
   void CodeGenInference() final;
 
   /*! \brief Get the docs for the op*/
-  const Array<Doc> GetOpCodes(const MSCJoint& node,
-                              const std::shared_ptr<RelaxCodeDenConfig>& config) final;
+  const Array<Doc> GetOpCodes(const MSCJoint& node) final;
 
   /*! \brief Get tensor type of the framework*/
   const String TensorType() const final { return "relax.Expr"; }

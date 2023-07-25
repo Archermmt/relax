@@ -27,6 +27,11 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
+void PythonPrinter::PrintTypedDoc(const AttrAccessDoc& doc) {
+  PrintDoc(doc->value, false);
+  output_ << "." << doc->name;
+}
+
 void PythonPrinter::PrintTypedDoc(const CallDoc& doc) {
   PrintDoc(doc->callee, false);
   output_ << "(";
@@ -42,37 +47,6 @@ void PythonPrinter::PrintTypedDoc(const CallDoc& doc) {
     output_ << (i == doc->kwargs_keys.size() - 1 ? "" : ", ");
   }
   output_ << ")";
-}
-
-void PythonPrinter::PrintTypedDoc(const FunctionDoc& doc) {
-  for (const AssignDoc& arg_doc : doc->args) {
-    ICHECK(arg_doc->comment == nullptr) << "Function arg cannot have comment attached to them.";
-  }
-
-  PrintDecorators(doc->decorators);
-
-  output_ << "def ";
-  PrintDoc(doc->name, false);
-
-  output_ << "(";
-  PrintJoinedDocs(doc->args, ", ");
-  output_ << ")";
-
-  if (doc->return_type.defined()) {
-    output_ << " -> ";
-    PrintDoc(doc->return_type.value(), false);
-  }
-
-  output_ << ":";
-
-  MaybePrintComment(doc, true);
-  PrintIndentedBlock(doc->body);
-  NewLine(false);
-}
-
-void PythonPrinter::PrintTypedDoc(const AttrAccessDoc& doc) {
-  PrintDoc(doc->value, false);
-  output_ << "." << doc->name;
 }
 
 void PythonPrinter::PrintTypedDoc(const AssignDoc& doc) {
@@ -113,6 +87,51 @@ void PythonPrinter::PrintTypedDoc(const IfDoc& doc) {
     NewLine();
     output_ << "else:";
     PrintIndentedBlock(doc->else_branch);
+  }
+}
+
+void PythonPrinter::PrintTypedDoc(const ScopeDoc& doc) {
+  MaybePrintComment(doc, true);
+  output_ << "with ";
+  PrintDoc(doc->rhs, false);
+  if (doc->lhs != nullptr) {
+    output_ << " as ";
+    PrintDoc(doc->lhs.value(), false);
+  }
+  output_ << ":";
+
+  PrintIndentedBlock(doc->body);
+}
+
+void PythonPrinter::PrintTypedDoc(const FunctionDoc& doc) {
+  for (const AssignDoc& arg_doc : doc->args) {
+    ICHECK(arg_doc->comment == nullptr) << "Function arg cannot have comment attached to them.";
+  }
+
+  PrintDecorators(doc->decorators);
+
+  output_ << "def ";
+  PrintDoc(doc->name, false);
+
+  output_ << "(";
+  PrintJoinedDocs(doc->args, ", ");
+  output_ << ")";
+
+  if (doc->return_type.defined()) {
+    output_ << " -> ";
+    PrintDoc(doc->return_type.value(), false);
+  }
+
+  output_ << ":";
+
+  MaybePrintComment(doc, true);
+  PrintIndentedBlock(doc->body);
+  NewLine(false);
+}
+
+void PythonPrinter::PrintTypedDoc(const CommentDoc& doc) {
+  if (doc->comment.defined()) {
+    output_ << "# " << doc->comment.value();
   }
 }
 

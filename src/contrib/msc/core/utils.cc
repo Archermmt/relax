@@ -143,6 +143,29 @@ const String StringUtils::ToString(const runtime::ObjectRef& obj) {
   return obj_string;
 }
 
+bool StringUtils::CompareArrays(const Array<String>& left, const Array<String>& right, int size) {
+  if (left.size() == right.size() == 0) {
+    return true;
+  }
+  if (size == -1 && left.size() != right.size()) {
+    return false;
+  }
+  if (left.size() == 0 || right.size() == 0) {
+    return false;
+  }
+  size = left.size();
+  ICHECK_GT(size, 0) << "Positive size should be given, get " << size;
+  if (size > left.size() || size > right.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size; i++) {
+    if (left[i] != right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const Span SpanUtils::SetAttr(const Span& span, const String& key, const String& value) {
   if (value.size() == 0) {
     return span;

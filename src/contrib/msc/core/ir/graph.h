@@ -305,6 +305,32 @@ class BaseJointNode : public Object {
   bool GetAttr(const String& key, std::vector<int64_t>* val) const;
   bool GetAttr(const String& key, std::vector<float>* val) const;
 
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("index", &index);
+    v->Visit("name", &name);
+    v->Visit("master", &master);
+    v->Visit("optype", &optype);
+    v->Visit("attrs", &attrs);
+    v->Visit("parents", &parents);
+    v->Visit("childern", &children);
+  }
+
+  bool SEqualReduce(const BaseJointNode* other, SEqualReducer equal) const {
+    return equal(name, other->name) &&
+           equal(master, other->master) & equal(optype, other->optype) &&
+           equal(attrs, other->attrs) && equal(parents, other->parents) &&
+           equal(children, other->children);
+  }
+
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(name);
+    hash_reduce(master);
+    hash_reduce(optype);
+    hash_reduce(attrs);
+    hash_reduce(parents);
+    hash_reduce(children);
+  }
+
   static constexpr const char* _type_key = "msc.core.BaseJoint";
   static constexpr const bool _type_has_method_sequal_reduce = true;
   static constexpr const bool _type_has_method_shash_reduce = true;
@@ -361,13 +387,7 @@ class MSCJointNode : public BaseJointNode {
   const std::pair<MSCJoint, size_t> ProducerAndIdxOf(const MSCTensor& input) const;
 
   void VisitAttrs(AttrVisitor* v) {
-    v->Visit("index", &index);
-    v->Visit("name", &name);
-    v->Visit("master", &master);
-    v->Visit("optype", &optype);
-    v->Visit("attrs", &attrs);
-    v->Visit("parents", &parents);
-    v->Visit("childern", &children);
+    BaseJointNode::VisitAttrs(v);
     v->Visit("scope", &scope);
     v->Visit("inputs", &inputs);
     v->Visit("outputs", &outputs);
@@ -375,20 +395,13 @@ class MSCJointNode : public BaseJointNode {
   }
 
   bool SEqualReduce(const MSCJointNode* other, SEqualReducer equal) const {
-    return equal(name, other->name) && equal(master, other->master) &&
-           equal(optype, other->optype) && equal(attrs, other->attrs) &&
-           equal(parents, other->parents) && equal(children, other->children) &&
-           equal(scope, other->scope) && equal(inputs, other->inputs) &&
-           equal(outputs, other->outputs) && equal(weights, other->weights);
+    return BaseJointNode::SEqualReduce(other, equal) && equal(scope, other->scope) &&
+           equal(inputs, other->inputs) && equal(outputs, other->outputs) &&
+           equal(weights, other->weights);
   }
 
   void SHashReduce(SHashReducer hash_reduce) const {
-    hash_reduce(name);
-    hash_reduce(master);
-    hash_reduce(optype);
-    hash_reduce(attrs);
-    hash_reduce(parents);
-    hash_reduce(children);
+    BaseJointNode::SHashReduce(hash_reduce);
     hash_reduce(scope);
     hash_reduce(inputs);
     hash_reduce(outputs);
@@ -450,33 +463,19 @@ class WeightJointNode : public BaseJointNode {
   Array<BaseJoint> friends;
 
   void VisitAttrs(AttrVisitor* v) {
-    v->Visit("index", &index);
-    v->Visit("name", &name);
-    v->Visit("master", &master);
-    v->Visit("optype", &optype);
-    v->Visit("attrs", &attrs);
-    v->Visit("parents", &parents);
-    v->Visit("children", &children);
+    BaseJointNode::VisitAttrs(v);
     v->Visit("wtype", &wtype);
     v->Visit("weight", &weight);
     v->Visit("friends", &friends);
   }
 
   bool SEqualReduce(const WeightJointNode* other, SEqualReducer equal) const {
-    return equal(name, other->name) &&
-           equal(master, other->master) & equal(optype, other->optype) &&
-           equal(attrs, other->attrs) && equal(parents, other->parents) &&
-           equal(children, other->children) && equal(wtype, other->wtype) &&
+    return BaseJointNode::SEqualReduce(other, equal) && equal(wtype, other->wtype) &&
            equal(weight, other->weight) && equal(friends, other->friends);
   }
 
   void SHashReduce(SHashReducer hash_reduce) const {
-    hash_reduce(name);
-    hash_reduce(master);
-    hash_reduce(optype);
-    hash_reduce(attrs);
-    hash_reduce(parents);
-    hash_reduce(children);
+    BaseJointNode::SHashReduce(hash_reduce);
     hash_reduce(wtype);
     hash_reduce(weight);
     hash_reduce(friends);
@@ -523,6 +522,23 @@ class BaseGraphNode : public Object {
   Array<String> node_names;
   /*! \brief The nodes in graph, can be changed. */
   Map<String, BaseJoint> nodes;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("name", &name);
+    v->Visit("nodes", &nodes);
+    v->Visit("node_names", &node_names);
+  }
+
+  bool SEqualReduce(const BaseGraphNode* other, SEqualReducer equal) const {
+    return equal(name, other->name) && equal(nodes, other->nodes) &&
+           equal(node_names, other->node_names);
+  }
+
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(name);
+    hash_reduce(nodes);
+    hash_reduce(node_names);
+  }
 
   static constexpr const char* _type_key = "msc.core.BaseGraph";
   static constexpr const bool _type_has_method_sequal_reduce = true;
@@ -595,24 +611,19 @@ class MSCGraphNode : public BaseGraphNode {
   void AnalysisGraph();
 
   void VisitAttrs(AttrVisitor* v) {
-    v->Visit("name", &name);
-    v->Visit("nodes", &nodes);
-    v->Visit("node_names", &node_names);
+    BaseGraphNode::VisitAttrs(v);
     v->Visit("input_names", &input_names);
     v->Visit("output_names", &output_names);
     v->Visit("weight_holders", &weight_holders);
   }
 
   bool SEqualReduce(const MSCGraphNode* other, SEqualReducer equal) const {
-    return equal(name, other->name) && equal(nodes, other->nodes) &&
-           equal(node_names, other->node_names) && equal(input_names, other->input_names) &&
+    return BaseGraphNode::SEqualReduce(other, equal) && equal(input_names, other->input_names) &&
            equal(output_names, other->output_names) && equal(weight_holders, other->weight_holders);
   }
 
   void SHashReduce(SHashReducer hash_reduce) const {
-    hash_reduce(name);
-    hash_reduce(nodes);
-    hash_reduce(node_names);
+    BaseGraphNode::SHashReduce(hash_reduce);
     hash_reduce(input_names);
     hash_reduce(output_names);
     hash_reduce(weight_holders);
@@ -665,22 +676,13 @@ class WeightGraphNode : public BaseGraphNode {
   /*! \brief Find node in graph. */
   const WeightJoint FindNode(const String& name) const;
 
-  void VisitAttrs(AttrVisitor* v) {
-    v->Visit("name", &name);
-    v->Visit("nodes", &nodes);
-    v->Visit("node_names", &node_names);
-  }
+  void VisitAttrs(AttrVisitor* v) { BaseGraphNode::VisitAttrs(v); }
 
   bool SEqualReduce(const WeightGraphNode* other, SEqualReducer equal) const {
-    return equal(name, other->name) && equal(nodes, other->nodes) &&
-           equal(node_names, other->node_names);
+    return BaseGraphNode::SEqualReduce(other, equal);
   }
 
-  void SHashReduce(SHashReducer hash_reduce) const {
-    hash_reduce(name);
-    hash_reduce(nodes);
-    hash_reduce(node_names);
-  }
+  void SHashReduce(SHashReducer hash_reduce) const { BaseGraphNode::SHashReduce(hash_reduce); }
 
   static constexpr const char* _type_key = "msc.core.WeightGraph";
   TVM_DECLARE_FINAL_OBJECT_INFO(WeightGraphNode, BaseGraphNode);

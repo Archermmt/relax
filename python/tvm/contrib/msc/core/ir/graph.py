@@ -58,6 +58,13 @@ class MSCTensor(Object):
             _ffi_api.MSCTensor, name, dtype, layout, shape, alias or ""
         )
 
+    def get_shape(self):
+        return [int(i) for i in self.shape]
+
+    @property
+    def dtype_name(self):
+        return _ffi_api.MSCTensorDtypeName(self)
+
 
 class BaseJoint(Object):
     """Base class of all MSC Nodes."""
@@ -113,6 +120,60 @@ class MSCJoint(BaseJoint):
             outputs,
             weights,
         )
+
+    def input_at(self, idx: int) -> MSCTensor:
+        """Get input at idx.
+
+        Parameters
+        ----------
+        idx: int
+            The index of input.
+
+        Returns
+        -------
+        input: MSCTensor
+            The input Tensor.
+        """
+
+        return _ffi_api.MSCJointInputAt(self, idx)
+
+    def output_at(self, idx: int) -> MSCTensor:
+        """Get output at idx.
+
+        Parameters
+        ----------
+        idx: int
+            The index of output.
+
+        Returns
+        -------
+        output: MSCTensor
+            The output Tensor.
+        """
+
+        return _ffi_api.MSCJointOutputAt(self, idx)
+
+    def get_inputs(self) -> List[MSCTensor]:
+        """Get all the inputs.
+
+        Returns
+        -------
+        inputs: list<MSCJoint>
+            The input Tensors.
+        """
+
+        return _ffi_api.MSCJointGetInputs(self)
+
+    def get_outputs(self) -> List[MSCTensor]:
+        """Get all the outputs.
+
+        Returns
+        -------
+        outputs: list<MSCJoint>
+            The output Tensors.
+        """
+
+        return _ffi_api.MSCJointGetOutputs(self)
 
 
 @tvm._ffi.register_object("msc.core.WeightJoint")
@@ -279,6 +340,60 @@ class MSCGraph(BaseGraph):
         for n in self.node_names:
             yield self.find_node(n)
 
+    def input_at(self, idx: int) -> MSCTensor:
+        """Get input at idx.
+
+        Parameters
+        ----------
+        idx: int
+            The index of input.
+
+        Returns
+        -------
+        input: MSCTensor
+            The input Tensor.
+        """
+
+        return _ffi_api.MSCGraphInputAt(self, idx)
+
+    def output_at(self, idx: int) -> MSCTensor:
+        """Get output at idx.
+
+        Parameters
+        ----------
+        idx: int
+            The index of output.
+
+        Returns
+        -------
+        output: MSCTensor
+            The output Tensor.
+        """
+
+        return _ffi_api.MSCGraphOutputAt(self, idx)
+
+    def get_inputs(self) -> List[MSCTensor]:
+        """Get all the inputs.
+
+        Returns
+        -------
+        inputs: list<MSCJoint>
+            The input Tensors.
+        """
+
+        return _ffi_api.MSCGraphGetInputs(self)
+
+    def get_outputs(self) -> List[MSCTensor]:
+        """Get all the outputs.
+
+        Returns
+        -------
+        outputs: list<MSCJoint>
+            The output Tensors.
+        """
+
+        return _ffi_api.MSCGraphGetOutputs(self)
+
     def to_json(self, path: Optional[str] = None) -> str:
         """Dump the graph to json.
 
@@ -342,6 +457,19 @@ class MSCGraph(BaseGraph):
             Whether two graphs are the same.
         """
 
+        if self.node_names != other.node_names:
+            return False
+        if self.input_names != other.input_names or self.output_names != other.output_names:
+            return False
+        for i, o_i in zip(self.get_inputs(), other.get_inputs()):
+            if not i.is_same(o_i):
+                return False
+        for o, o_o in zip(self.get_outputs(), other.get_outputs()):
+            if not o.is_same(o_o):
+                return False
+        for n, o_n in zip(self.get_nodes(), other.get_nodes()):
+            if not n.is_same(o_n):
+                return False
         return True
 
     def visualize(self, path: Optional[str] = None) -> str:

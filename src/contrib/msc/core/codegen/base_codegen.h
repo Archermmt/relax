@@ -37,71 +37,9 @@ namespace msc {
 
 using namespace tvm::script::printer;
 
-#define CODEGEN_CONFIG_MEMBERS             \
-  bool is_train{false};                    \
-  bool need_prune{false};                  \
-  bool need_quantize{false};               \
-  bool need_collect{false};                \
-  bool need_distill{false};                \
-  bool need_process{false};                \
-  bool need_test{true};                    \
-  std::string prefix{"res_"};              \
-  std::string baseline_folder{"baseline"}; \
-  std::string version;
-
-#define CODEGEN_CONFIG_PARSE                    \
-  if (key == "is_train") {                      \
-    reader->Read(&is_train);                    \
-  } else if (key == "need_prune") {             \
-    reader->Read(&need_prune);                  \
-    need_process |= need_prune;                 \
-  } else if (key == "need_quantize") {          \
-    reader->Read(&need_quantize);               \
-    need_process |= need_quantize;              \
-  } else if (key == "need_collect") {           \
-    reader->Read(&need_collect);                \
-    need_process |= need_collect;               \
-  } else if (key == "need_distill") {           \
-    reader->Read(&need_distill);                \
-    need_process |= need_distill;               \
-  } else if (key == "need_test") {              \
-    reader->Read(&need_test);                   \
-  } else if (key == "version") {                \
-    reader->Read(&version);                     \
-  } else if (key == "prefix") {                 \
-    reader->Read(&prefix);                      \
-  } else if (key == "baseline_folder") {        \
-    reader->Read(&baseline_folder);             \
-  } else {                                      \
-    LOG(FATAL) << "Do not support key " << key; \
-  }
-
-#define CODEGEN_METHODS                                                                            \
-  const String GetSuffix(bool as_raw = false) {                                                    \
-    const String& suffix = as_raw && config()->need_process ? "_raw" : "";                         \
-    return suffix;                                                                                 \
-  };                                                                                               \
-  virtual const String IdxNode(const MSCJoint& node, bool as_raw = true) {                         \
-    return CodeGenUtils::IdxNode(node, config()->prefix, GetSuffix(as_raw));                       \
-  };                                                                                               \
-  virtual const String IdxInput(const MSCJoint& node, int idx = 0, bool as_raw = false) {          \
-    return CodeGenUtils::IdxInput(node, config()->prefix, idx, GetSuffix(as_raw));                 \
-  };                                                                                               \
-  virtual const String IdxOutput(const MSCJoint& node, int idx = 0, bool as_raw = false) {         \
-    return CodeGenUtils::IdxOutput(node, config()->prefix, idx, GetSuffix(as_raw));                \
-  };                                                                                               \
-  virtual const String IdxWeight(const MSCJoint& node, const String& wtype, bool as_raw = false) { \
-    return CodeGenUtils::IdxWeight(node, wtype, GetSuffix(as_raw));                                \
-  };                                                                                               \
-  virtual const String DType(const DataType& dtype) { return runtime::DLDataType2String(dtype); }  \
-  virtual const String Comment(const MSCJoint& node) {                                             \
-    return CodeGenUtils::CommentNode(node, config()->prefix);                                      \
-  }
-
 /*!
  * \brief CodeGen for MSCJoint op
  */
-
 template <typename ConfigType>
 class BaseOpCodeGen {
  public:
@@ -110,14 +48,18 @@ class BaseOpCodeGen {
    * \param func_name the function name for the node.
    * \param config the config json for the node.
    */
-  explicit BaseOpCodeGen(const String& func_name, const std::shared_ptr<ConfigType> config)
-      : func_name_(func_name), config_(config) {}
+  explicit BaseOpCodeGen(const String& func_name) : func_name_(func_name) {}
+
+  virtual ~BaseOpCodeGen() = default;
 
   /*! \brief Config the BaseOpCodeGen*/
-  void Config(const MSCJoint& node) { node_ = node; }
+  void Config(const MSCJoint& node, const std::shared_ptr<ConfigType> config) {
+    node_ = node;
+    config_ = config;
+  }
 
   /*! \brief Convert node to docs*/
-  virtual const Array<Doc> CodeGen() = 0;
+  virtual const Array<Doc> GetDocs() = 0;
 
   CODEGEN_METHODS;
 
@@ -139,6 +81,9 @@ class BaseOpCodeGen {
     return IdxWeight(node_, wtype, as_raw);
   }
 
+  /*! \brief Get comment for default node*/
+  virtual const String Comment() { return Comment(node_); }
+
   /*! \brief Get func_name for the default node*/
   const String func_name() { return func_name_; }
 
@@ -147,6 +92,9 @@ class BaseOpCodeGen {
 
   /*! \brief Get the default node*/
   const MSCJoint node() { return node_; }
+
+  /*! \brief The stack of codes*/
+  CodeStack stack_;
 
  private:
   String func_name_;
@@ -173,7 +121,12 @@ class BaseGraphCodeGen {
       dmlc::JSONReader reader(&is);
       reader.Read(config_.get());
     }
+    while (!scopes_.empty()) {
+      scopes_.pop();
+    }
   }
+
+  virtual ~BaseGraphCodeGen() = default;
 
   /*! \brief Stack the docs for the script*/
   virtual void CodeGen() = 0;
@@ -184,12 +137,45 @@ class BaseGraphCodeGen {
   CODEGEN_METHODS;
 
  protected:
+  /*!
+   * \brief Compare node scope with current scope
+   * 0 for same scope, 1 for increase scope, -1 for decrease scope
+   */
+  int CompareScope(const MSCJoint& node) {
+    if (node->scope.size() == 0) {
+      return 0;
+    }
+    if (scopes_.size() == 0) {
+      scopes_.push(node->scope);
+      return 1;
+    }
+    if (node->scope.size() == scopes_.top().size()) {
+      ICHECK(StringUtils::CompareArrays(node->scope, scopes_.top()))
+          << "Scope mismatch, node " << node->scope << " compare to current " << scopes_.top();
+      return 0;
+    } else if (node->scope.size() == scopes_.top().size() + 1) {
+      ICHECK(StringUtils::CompareArrays(node->scope, scopes_.top(), scopes_.top().size()))
+          << "Scope increase mismatch, node " << node->scope << " compare to current "
+          << scopes_.top();
+      scopes_.push(node->scope);
+      return 1;
+    } else if (node->scope.size() == scopes_.top().size() - 1) {
+      ICHECK(StringUtils::CompareArrays(node->scope, scopes_.top(), node->scope.size()))
+          << "Scope decrease mismatch, node " << node->scope << " compare to current "
+          << scopes_.top();
+      scopes_.pop();
+      return -1;
+    } else {
+      LOG(FATAL) << "Unexpected node scope " << node->scope << " with current scope "
+                 << scopes_.top();
+    }
+  }
+
   /*! \brief Get the docs from last block*/
   const Array<Doc> GetDocs() const { return stack_.GetDocs(); }
 
   /*! \brief Get the docs for the op*/
-  virtual const Array<Doc> GetOpCodes(const MSCJoint& node,
-                                      const std::shared_ptr<ConfigType>& config) = 0;
+  virtual const Array<Doc> GetOpCodes(const MSCJoint& node) = 0;
 
   /*! \brief Get the graph*/
   const MSCGraph graph() const { return graph_; }
@@ -197,12 +183,21 @@ class BaseGraphCodeGen {
   /*! \brief Get the config*/
   const std::shared_ptr<ConfigType> config() { return config_; }
 
-  /*! \brief The stack_ of codes*/
+  /*! \brief Get the scopes*/
+  const std::stack<Array<String>> scopes() const { return scopes_; }
+
+  /*! \brief The stack of codes*/
   CodeStack stack_;
 
  private:
+  /*! \brief The graph*/
   MSCGraph graph_;
+
+  /*! \brief The config*/
   std::shared_ptr<ConfigType> config_;
+
+  /*! \brief The scopes for graph*/
+  std::stack<Array<String>> scopes_;
 };
 
 }  // namespace msc

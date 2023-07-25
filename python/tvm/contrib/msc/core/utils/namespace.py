@@ -52,3 +52,13 @@ class MSC_KEY:
 
     WORKSPACE = "workspace"
     VERBOSE = "verbose"
+    REGISTERED_FUNCS = "registered_funcs"
+    REGISTERED_TOOLS = "registered_tools"
+
+
+class MSC_FRAMEWORK:
+    """Framework type for the MSC"""
+
+    MSC = "msc"
+    TVM = "tvm"
+    TORCH = "torch"

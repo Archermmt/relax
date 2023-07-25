@@ -29,18 +29,6 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
-void MSCBasePrinter::MaybePrintComment(const StmtDoc& stmt, bool multi_lines) {
-  if (stmt->comment.defined()) {
-    if (multi_lines) {
-      for (const auto& l : StringUtils::Split(stmt->comment.value(), "\n")) {
-        PrintDoc(CommentDoc(l));
-      }
-    } else {
-      PrintDoc(CommentDoc(stmt->comment.value()), false);
-    }
-  }
-}
-
 void MSCBasePrinter::PrintDoc(const Doc& doc, bool new_line) {
   if (new_line) {
     NewLine();
@@ -164,6 +152,18 @@ void MSCBasePrinter::PrintTypedDoc(const StmtBlockDoc& doc) {
 void MSCBasePrinter::PrintTypedDoc(const ExprStmtDoc& doc) {
   PrintDoc(doc->expr, false);
   MaybePrintComment(doc);
+}
+
+void MSCBasePrinter::MaybePrintComment(const StmtDoc& stmt, bool multi_lines) {
+  if (stmt->comment.defined()) {
+    if (multi_lines) {
+      for (const auto& l : StringUtils::Split(stmt->comment.value(), "\n")) {
+        PrintDoc(CommentDoc(l));
+      }
+    } else {
+      PrintDoc(CommentDoc(stmt->comment.value()), false);
+    }
+  }
 }
 
 }  // namespace msc

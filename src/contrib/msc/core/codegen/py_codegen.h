@@ -63,13 +63,14 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
   /*! \brief Stack the docs for the script*/
   virtual void CodeGen() {
     CodeGenHeader();
+    this->stack_.line().comment("Define the helpers");
     CodeGenHelper();
+    this->stack_.line().comment("Define the graph");
     CodeGenGraph();
-    /*
     if (this->config()->need_test) {
+      this->stack_.line().comment("Define the test");
       CodeGenTest();
     }
-    */
   }
 
  protected:
@@ -79,7 +80,7 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
         .line("import numpy as np")
         .line("from typing import List, Dict")
         .line("import tvm")
-        .line("from tvm.contrib.core import utils as msir_utils");
+        .line("from tvm.contrib.msc.core import utils as msir_utils");
   }
 
   /*! \brief Stack the docs for the helpers*/
@@ -88,14 +89,14 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
         .func_arg("tensor", TensorType())
         .func_arg("name", "str")
         .func_arg("consumer", "str")
-        .func_body_start()
-        .func_body_end("tensor");
+        .func_start()
+        .func_end("tensor");
     if (this->config()->need_test) {
       this->stack_.func_def("load_data", "np.ndarray")
           .func_arg("name", "str")
           .func_arg("shape", "List[int]")
           .func_arg("dtype", "str")
-          .func_body_start()
+          .func_start()
           .call_start("os.path.join")
           .call_str_arg(this->config()->baseline_folder)
           .call_arg("name + \".bin\"")
@@ -112,18 +113,17 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
           .call_start("np.ones")
           .call_arg("(shape)")
           .call_end("data")
-          .inplace_start("asdtype")
+          .inplace_start("astype")
           .call_arg("dtype")
           .inplace_end()
           .cond_end()
-          .func_body_end("data");
+          .func_end("data");
     }
   }
 
   /*! \brief Stack the docs for the test*/
   void CodeGenTest() {
-    this->stack_.line("if __name__ == \"main\":")
-        .start_block()
+    this->stack_.cond_if("__name__ == \"__main__\"")
         .comment("Prepare test datas")
         .assign("inputs", "{}")
         .assign("golden", "{}");
@@ -133,8 +133,7 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
           .call_str_arg(input->alias)
           .call_list_arg(input->shape)
           .call_str_arg(runtime::DLDataType2String(input->dtype))
-          .call_end("inputs[\"" + input->alias + "\"]")
-          .GetDocs();
+          .call_end("inputs[\"" + input->alias + "\"]");
     }
     for (const auto& o : this->graph()->output_names) {
       const auto& output = this->graph()->FindTensor(o);
@@ -142,11 +141,11 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
           .call_str_arg(output->alias)
           .call_list_arg(output->shape)
           .call_str_arg(runtime::DLDataType2String(output->dtype))
-          .call_end("golden[\"" + output->alias + "\"]")
-          .GetDocs();
+          .call_end("golden[\"" + output->alias + "\"]");
     }
+    this->stack_.comment("Build and inference the graph");
     CodeGenInference();
-    this->stack_.line("msc_utils.compare_arrays(golden, outputs, verbose=\"detail\")").end_block();
+    this->stack_.line("msc_utils.compare_arrays(golden, outputs, verbose=\"detail\")").cond_end();
   }
 
   /*! \brief Stack the docs for the node*/
@@ -169,7 +168,7 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
             .call_end(this->IdxWeight(node, pair.first, false));
       }
     }
-    for (const auto& d : this->GetOpCodes(node, this->config())) {
+    for (const auto& d : this->GetOpCodes(node)) {
       this->stack_.line(d);
     }
   }

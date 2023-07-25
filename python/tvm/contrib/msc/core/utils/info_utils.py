@@ -14,51 +14,21 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils.arguments"""
+"""tvm.contrib.msc.core.utils.info_utils"""
 
 import os
 import json
-from typing import List
 
 
-def dump_list(list_obj: List[str]) -> List[dict]:
-    """Dump the string list to dict list.
-
-    Parameters
-    ----------
-    list_obj: list<string>
-        The list with string.
-
-    Returns
-    -------
-    list_dict: list<dict>
-        The list with dict.
-    """
-
-    list_dict = []
-    for o in list_obj:
-        if not isinstance(o, str):
-            list_dict.append(o)
-            continue
-        try:
-            value = json.loads(o)
-        except json.decoder.JSONDecodeError:
-            value = o
-        if isinstance(value, dict):
-            value = {k: dump_list(v) if isinstance(v, list) else v for k, v in value.items()}
-        list_dict.append(value)
-    return list_dict
-
-
-def load_dict(str_dict: str, dump_list=False) -> dict:
+def load_dict(str_dict: str, flavor: str = "json") -> dict:
     """Load the string/file to dict.
 
     Parameters
     ----------
     str_dict: string
         The file_path or string object.
-    dump_list: bool
-        Whether to dump the list into dict
+    flavor: str
+        The flavor for load.
 
     Returns
     -------
@@ -71,18 +41,18 @@ def load_dict(str_dict: str, dump_list=False) -> dict:
             dict_obj = json.load(f)
     elif isinstance(str_dict, str):
         dict_obj = json.loads(str_dict)
-    if dump_list:
-        dict_obj = {k: dump_list(v) if isinstance(v, list) else v for k, v in dict_obj.items()}
     return dict_obj
 
 
-def dump_dict(dict_obj: dict) -> str:
+def dump_dict(dict_obj: dict, flavor: str = "dmlc") -> str:
     """Dump the config to string.
 
     Parameters
     ----------
     src_dict: dict
         The source dict.
+    flavor: str
+        The flavor for dumps.
 
     Returns
     -------
@@ -92,4 +62,6 @@ def dump_dict(dict_obj: dict) -> str:
 
     if not dict_obj:
         return ""
-    return json.dumps({k: int(v) if isinstance(v, bool) else v for k, v in dict_obj.items()})
+    if flavor == "dmlc":
+        return json.dumps({k: int(v) if isinstance(v, bool) else v for k, v in dict_obj.items()})
+    return json.dumps(dict_obj)

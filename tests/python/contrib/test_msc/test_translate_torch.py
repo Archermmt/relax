@@ -24,16 +24,19 @@ from tvm.contrib.msc.core.ir import translate
 from tvm.contrib.msc.core import utils as msc_utils
 
 
+def _translate(expected):
+    graph, weights = translate.from_relax(expected)
+    build_folder = msc_utils.msc_dir("msc_test", cleanup=True)
+    return translate.to_relax(
+        graph, weights, codegen_config={"explicit_name": False}, build_folder=build_folder
+    )
+
+
 def verify_model(torch_model, input_info):
     graph_model = fx.symbolic_trace(torch_model)
     with torch.no_grad():
         expected = from_fx(graph_model, input_info)
-    print("[TMINFO] relax expected " + str(expected))
-    graph, weights = translate.from_relax(expected)
-    mod = translate.to_relax(graph, weights)
-    print("mod " + str(mod))
-    raise Exception("stop here!!")
-    # tvm.ir.assert_structural_equal(mod, expected)
+    tvm.ir.assert_structural_equal(_translate(expected), expected)
 
 
 def test_conv1d():
@@ -54,10 +57,9 @@ def test_conv1d():
             return self.conv(input)
 
     input_info = [([1, 3, 10], "float32")]
-    model = Conv1D1()
-    verify_model(model, input_info)
+    verify_model(Conv1D1(), input_info)
+    verify_model(Conv1D2(), input_info)
 
 
 if __name__ == "__main__":
-    # tvm.testing.main()
-    test_conv1d()
+    tvm.testing.main()

@@ -95,18 +95,6 @@ class MSCBasePrinter {
   String GetString() const { return output_.str(); }
 
  protected:
-  /*! \brief Print docs to joined doc */
-  template <typename DocType>
-  void PrintJoinedDocs(const Array<DocType>& docs, const String& separator = ", ") {
-    for (size_t i = 0; i < docs.size(); i++) {
-      PrintDoc(docs[i], false);
-      output_ << (i == docs.size() - 1 ? "" : separator);
-    }
-  }
-
-  /*! \brief Print comment for stmt*/
-  virtual void MaybePrintComment(const StmtDoc& stmt, bool multi_lines = false);
-
   /*! \brief Print doc*/
   void PrintDoc(const Doc& doc, bool new_line = true);
 
@@ -176,6 +164,18 @@ class MSCBasePrinter {
 
   /*! \brief Virtual method to print a CommentDoc*/
   virtual void PrintTypedDoc(const CommentDoc& doc) { LOG(FATAL) << "Comment is not implemented"; }
+
+  /*! \brief Print docs to joined doc */
+  template <typename DocType>
+  void PrintJoinedDocs(const Array<DocType>& docs, const String& separator = ", ") {
+    for (size_t i = 0; i < docs.size(); i++) {
+      PrintDoc(docs[i], false);
+      output_ << (i == docs.size() - 1 ? "" : separator);
+    }
+  }
+
+  /*! \brief Print comment for stmt*/
+  virtual void MaybePrintComment(const StmtDoc& stmt, bool multi_lines = false);
 
   /*!
    * \brief Start line into the output stream.

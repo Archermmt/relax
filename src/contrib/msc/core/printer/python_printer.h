@@ -46,20 +46,26 @@ class PythonPrinter : public MSCBasePrinter {
   explicit PythonPrinter(const std::string& options = "") : MSCBasePrinter(options) {}
 
  protected:
-  /*! * \brief Print a CallDoc to python format*/
-  void PrintTypedDoc(const CallDoc& doc) final;
-
-  /*! * \brief Print a FunctionDoc to python format*/
-  void PrintTypedDoc(const FunctionDoc& doc) final;
-
   /*! * \brief Print a AttrAccessDoc to python format*/
   void PrintTypedDoc(const AttrAccessDoc& doc) final;
+
+  /*! * \brief Print a CallDoc to python format*/
+  void PrintTypedDoc(const CallDoc& doc) final;
 
   /*! * \brief Print a AssignDoc to python format*/
   void PrintTypedDoc(const AssignDoc& doc) final;
 
   /*! * \brief Print a IfDoc to python format*/
   void PrintTypedDoc(const IfDoc& doc) final;
+
+  /*! * \brief Print a ScopeDoc to python format*/
+  void PrintTypedDoc(const ScopeDoc& doc) final;
+
+  /*! * \brief Print a FunctionDoc to python format*/
+  void PrintTypedDoc(const FunctionDoc& doc) final;
+
+  /*! * \brief Print a CommentDoc to python format*/
+  void PrintTypedDoc(const CommentDoc& doc) final;
 
  private:
   /*! \brief Print block with indent*/

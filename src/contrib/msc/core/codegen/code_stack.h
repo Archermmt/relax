@@ -47,7 +47,7 @@ class BaseStack {
     while (!blocks_.empty()) {
       blocks_.pop();
     }
-    StartBlock();
+    BlockStart();
   }
 
   /*! \brief Get the docs*/
@@ -64,6 +64,26 @@ class BaseStack {
   /*! \brief Push assign Doc*/
   void Assign(const String& lhs, const String& rhs, const String& annotation = "");
 
+  /*! \brief Push assign for list Doc*/
+  template <typename T>
+  inline void AssignList(const String& lhs, const std::vector<T>& rhs,
+                         const String& annotation = "") {
+    if (annotation.size() == 0) {
+      PushDoc(AssignDoc(IdDoc(lhs), DocUtils::ToListDoc(rhs), NullOpt));
+    } else {
+      PushDoc(AssignDoc(IdDoc(lhs), DocUtils::ToListDoc(rhs), IdDoc(annotation)));
+    }
+  }
+
+  template <typename T>
+  inline void AssignList(const String& lhs, const Array<T>& rhs, const String& annotation = "") {
+    if (annotation.size() == 0) {
+      PushDoc(AssignDoc(IdDoc(lhs), DocUtils::ToListDoc(rhs), NullOpt));
+    } else {
+      PushDoc(AssignDoc(IdDoc(lhs), DocUtils::ToListDoc(rhs), IdDoc(annotation)));
+    }
+  }
+
   /*! \brief Cache function Doc*/
   void FuncDef(const String& func_name, const String& ret_type = "");
 
@@ -74,19 +94,19 @@ class BaseStack {
   void FuncDecorator(const String& decorator);
 
   /*! \brief Start function body block*/
-  void FuncBodyStart();
+  void FuncStart();
 
   /*! \brief End function body block*/
-  void FuncBodyEnd(const String& ret_val = "");
+  void FuncEnd(const String& ret_val = "");
 
   /*! \brief Cache call Doc*/
-  void CallStart(const String& call_name);
+  void CallStart(const String& callee);
 
   /*! \brief Push call or/and assign Doc*/
   void CallEnd(const String& assign = "");
 
   /*! \brief Cache inplace call Doc*/
-  void InplaceStart(const String& call_name);
+  void InplaceStart(const String& callee);
 
   /*! \brief Push inplace call or/and assign Doc*/
   void InplaceEnd();
@@ -114,6 +134,12 @@ class BaseStack {
     CallArgument(DocUtils::ToListDoc(values), key);
   }
 
+  /*! \brief Cache call inplace func argument*/
+  void CallInplaceStart(const String& callee);
+
+  /*! \brief Push call inplace func argument*/
+  void CallInplaceEnd(const String& key = "");
+
   /*! \brief Push if to cache and start if block*/
   void ConditionIf(const String& predicate);
 
@@ -124,10 +150,16 @@ class BaseStack {
   void ConditionEnd();
 
   /*! \brief Start a new block*/
-  void StartBlock();
+  void BlockStart();
 
   /*! \brief End a block*/
-  void EndBlock(bool block_docs = true);
+  void BlockEnd(bool block_docs = true);
+
+  /*! \brief Start a new scope*/
+  void ScopeStart(const String& scope_def, const String& scope_ref = "");
+
+  /*! \brief End a scope*/
+  void ScopeEnd();
 
  private:
   /*! \brief Check if block left*/
@@ -176,12 +208,31 @@ class BaseStack {
     Assign(lhs, rhs, annotation);                                                               \
     return *this;                                                                               \
   }                                                                                             \
-  Stack& start_block() {                                                                        \
-    StartBlock();                                                                               \
+  template <typename T>                                                                         \
+  Stack& assign_list(const String& lhs, const std::vector<T>& rhs,                              \
+                     const String& annotation = "") {                                           \
+    AssignList(lhs, rhs, annotation);                                                           \
     return *this;                                                                               \
   }                                                                                             \
-  Stack& end_block(bool block_docs = true) {                                                    \
-    EndBlock(block_docs);                                                                       \
+  template <typename T>                                                                         \
+  Stack& assign_list(const String& lhs, const Array<T>& rhs, const String& annotation = "") {   \
+    AssignList(lhs, rhs, annotation);                                                           \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& block_start() {                                                                        \
+    BlockStart();                                                                               \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& block_end(bool block_docs = true) {                                                    \
+    BlockEnd(block_docs);                                                                       \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& scope_start(const String& scope_def, const String& scope_ref = "") {                   \
+    ScopeStart(scope_def, scope_ref);                                                           \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& scope_end() {                                                                          \
+    ScopeEnd();                                                                                 \
     return *this;                                                                               \
   }                                                                                             \
   Stack& func_def(const String& func_name, const String& ret_type = "") {                       \
@@ -196,12 +247,12 @@ class BaseStack {
     FuncDecorator(decorator);                                                                   \
     return *this;                                                                               \
   }                                                                                             \
-  Stack& func_body_start() {                                                                    \
-    FuncBodyStart();                                                                            \
+  Stack& func_start() {                                                                         \
+    FuncStart();                                                                                \
     return *this;                                                                               \
   }                                                                                             \
-  Stack& func_body_end(const String& ret_val = "") {                                            \
-    FuncBodyEnd(ret_val);                                                                       \
+  Stack& func_end(const String& ret_val = "") {                                                 \
+    FuncEnd(ret_val);                                                                           \
     return *this;                                                                               \
   }                                                                                             \
   Stack& call_start(const String& callee) {                                                     \
@@ -243,6 +294,14 @@ class BaseStack {
     CallListArg(values, key);                                                                   \
     return *this;                                                                               \
   }                                                                                             \
+  Stack& call_inplace_start(const String& callee) {                                             \
+    CallInplaceStart(callee);                                                                   \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& call_inplace_end(const String& key = "") {                                             \
+    CallInplaceEnd(key);                                                                        \
+    return *this;                                                                               \
+  }                                                                                             \
   Stack& cond_if(const String& predicate) {                                                     \
     ConditionIf(predicate);                                                                     \
     return *this;                                                                               \
@@ -272,43 +331,71 @@ class CodeStack : public BaseStack {
 /*!
  * \brief Stack Doc for codes
  */
-template <typename CodeGenType>
+template <typename OpCodeGenType>
 class OpCodeStack : public BaseStack {
  public:
   /*!
    * \brief The constructor of OpCodeStack
    * \param codegen the OpCodeGen pointer.
    */
-  explicit OpCodeStack(const CodeGenType* codegen) : BaseStack() { codegen_ = codegen; }
+  explicit OpCodeStack(OpCodeGenType* codegen) : BaseStack() { codegen_ = codegen; }
 
-  COMMON_WRAPPERS(OpCodeStack<CodeGenType>)
+  COMMON_WRAPPERS(OpCodeStack<OpCodeGenType>)
 
-  /*! \brief Cache func_call and assign Doc*/
-  OpCodeStack<CodeGenType>& op_start(const String& func_name = "auto",
-                                     const String& func_ret = "auto") {
-    const String& call_name = func_name == "auto" ? codegen_->func_name() : func_name;
-    const IdDoc& ret = func_ret == "auto" ? codegen_->IdxNode(true) : IdDoc(func_ret);
-    return call_start(call_name, ret);
+  /*! \brief Cache op_call Doc*/
+  OpCodeStack<OpCodeGenType>& op_start(const String& callee = "msc::auto") {
+    const String& v_callee = callee == "msc::auto" ? codegen_->func_name() : callee;
+    return call_start(v_callee);
+  }
+
+  /*! \brief Push op_call Doc*/
+  OpCodeStack<OpCodeGenType>& op_end(const String& assign_str = "msc::auto") {
+    const String& v_assign = assign_str == "msc::auto" ? codegen_->IdxNode(true) : assign_str;
+    return call_end(v_assign);
+  }
+
+  /*! \brief Push op comment Doc*/
+  OpCodeStack<OpCodeGenType>& op_comment(const String& comment_str = "msc::auto") {
+    const String& v_comment = (comment_str == "msc::auto" ? codegen_->Comment() : comment_str);
+    return comment(v_comment);
   }
 
   /*! \brief Cache attribute as argument*/
   template <typename T>
-  OpCodeStack<CodeGenType>& call_attr_arg(const String& attr_key = "", const String& key = "") {
+  OpCodeStack<OpCodeGenType>& op_arg(const String& attr_key = "", const String& key = "") {
     T attr_val;
-    if (codegen_->node()->GetAttr(attr_key, attr_val)) {
+    if (codegen_->node()->GetAttr(attr_key, &attr_val)) {
       return call_arg(attr_val, key.size() == 0 ? attr_key : key);
     }
     return *this;
   }
 
+  OpCodeStack<OpCodeGenType>& op_str_arg(const String& attr_key = "", const String& key = "") {
+    std::string attr_val;
+    if (codegen_->node()->GetAttr(attr_key, &attr_val)) {
+      return call_str_arg(attr_val, key.size() == 0 ? attr_key : key);
+    }
+    return *this;
+  }
+
+  /*! \brief Cache list attribute as argument*/
+  template <typename T>
+  OpCodeStack<OpCodeGenType>& op_list_arg(const String& attr_key = "", const String& key = "") {
+    std::vector<T> attr_val;
+    if (codegen_->node()->GetAttr(attr_key, &attr_val)) {
+      return call_list_arg(attr_val, key.size() == 0 ? attr_key : key);
+    }
+    return *this;
+  }
+
   /*! \brief Cache input as argument*/
-  OpCodeStack<CodeGenType>& call_input_arg(int idx = 0, const String& key = "") {
+  OpCodeStack<OpCodeGenType>& op_input_arg(int idx = 0, const String& key = "") {
     return call_arg(codegen_->IdxInput(idx, false), key);
   }
 
   /*! \brief Cache inputs as argument*/
-  OpCodeStack<CodeGenType>& call_inputs_arg(const String& key = "", bool as_list = true) {
-    Array<ExprDoc> inputs;
+  OpCodeStack<OpCodeGenType>& op_inputs_arg(bool as_list = true, const String& key = "") {
+    Array<String> inputs;
     for (size_t i = 0; i < codegen_->node()->inputs.size(); i++) {
       inputs.push_back(codegen_->IdxInput(i, false));
     }
@@ -322,17 +409,21 @@ class OpCodeStack : public BaseStack {
   }
 
   /*! \brief Cache output as argument*/
-  OpCodeStack<CodeGenType>& call_output_arg(int idx = 0, const String& key = "") {
+  OpCodeStack<OpCodeGenType>& op_output_arg(int idx = 0, const String& key = "") {
     return call_arg(codegen_->IdxOutput(idx, false), key);
   }
 
   /*! \brief Cache weight as argument*/
-  OpCodeStack<CodeGenType>& call_weight_arg(const String& wtype, const String& key = "") {
+  OpCodeStack<OpCodeGenType>& op_weight_arg(const String& wtype, const String& key = "") {
     return call_arg(codegen_->IdxWeight(wtype, false), key);
   }
 
+  OpCodeStack<OpCodeGenType>& call_dtype_arg(const DataType& dtype, const String& key = "") {
+    return call_arg(codegen_->DType(dtype), key);
+  }
+
  private:
-  CodeGenType* codegen_;
+  OpCodeGenType* codegen_;
 };
 
 }  // namespace msc
