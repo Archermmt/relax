@@ -84,6 +84,9 @@ class BaseStack {
     }
   }
 
+  /*! \brief Push attr access Doc*/
+  void AttrAccess(const String& attr);
+
   /*! \brief Cache function Doc*/
   void FuncDef(const String& func_name, const String& ret_type = "");
 
@@ -217,6 +220,10 @@ class BaseStack {
   template <typename T>                                                                         \
   Stack& assign_list(const String& lhs, const Array<T>& rhs, const String& annotation = "") {   \
     AssignList(lhs, rhs, annotation);                                                           \
+    return *this;                                                                               \
+  }                                                                                             \
+  Stack& attr_access(const String& attr) {                                                      \
+    AttrAccess(attr);                                                                           \
     return *this;                                                                               \
   }                                                                                             \
   Stack& block_start() {                                                                        \
@@ -415,7 +422,10 @@ class OpCodeStack : public BaseStack {
 
   /*! \brief Cache weight as argument*/
   OpCodeStack<OpCodeGenType>& op_weight_arg(const String& wtype, const String& key = "") {
-    return call_arg(codegen_->IdxWeight(wtype, false), key);
+    if (codegen_->node()->weights.count(wtype)) {
+      return call_arg(codegen_->IdxWeight(wtype, false), key);
+    }
+    return *this;
   }
 
   OpCodeStack<OpCodeGenType>& call_dtype_arg(const DataType& dtype, const String& key = "") {

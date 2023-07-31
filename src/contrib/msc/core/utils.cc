@@ -45,12 +45,16 @@ const Array<String> StringUtils::Split(const String& src_string, const String& s
   std::string src_cstring = src_string;
   const std::string& csep = sep;
   int pos = src_cstring.find(csep);
-  while (pos > 0) {
-    sub_strings.push_back(src_cstring.substr(0, pos));
+  while (pos >= 0) {
+    if (pos > 0) {
+      sub_strings.push_back(src_cstring.substr(0, pos));
+    }
     src_cstring = src_cstring.substr(pos + csep.size());
     pos = src_cstring.find(csep);
   }
-  sub_strings.push_back(src_cstring);
+  if (src_cstring.size() > 0) {
+    sub_strings.push_back(src_cstring);
+  }
   return sub_strings;
 }
 
@@ -83,7 +87,7 @@ const std::tuple<String, String> StringUtils::SplitOnce(const String& src_string
   if (pos >= 0) {
     return std::make_tuple(src_cstring.substr(0, pos), src_cstring.substr(pos + csep.size()));
   }
-  return std::make_tuple(String(), String());
+  return std::make_tuple(src_string, String());
 }
 
 const Array<String> StringUtils::GetClosures(const String& src_string, const String& left,
@@ -122,7 +126,9 @@ const String StringUtils::GetClosureOnce(const String& src_string, const String&
 
 const String StringUtils::ToString(const runtime::ObjectRef& obj) {
   String obj_string;
-  if (obj.as<StringObj>()) {
+  if (!obj.defined()) {
+    obj_string = "";
+  } else if (obj.as<StringObj>()) {
     obj_string = Downcast<String>(obj);
   } else if (const auto* n = obj.as<IntImmNode>()) {
     obj_string = std::to_string(n->value);
@@ -176,7 +182,7 @@ const Span SpanUtils::SetAttr(const Span& span, const String& key, const String&
     const String& source_str = span->source_name->name;
     String left = std::get<0>(StringUtils::SplitOnce(source_str, tokens[0]));
     String right = std::get<1>(StringUtils::SplitOnce(source_str, tokens[1]));
-    if (left.size() > 0 && right.size() > 0) {
+    if (left.size() > 0) {
       new_source = left + tokens[0] + value + tokens[1] + right;
     } else {
       new_source = source_str + tokens[0] + value + tokens[1];
@@ -207,48 +213,73 @@ const Map<String, String> SpanUtils::GetAttrs(const Span& span) {
   return attrs;
 }
 
-const Array<String> ExprUtils::GetInputTypes(const String& optype) {
+const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs_num) {
   Array<String> input_types;
-  if (optype == "relax.nn.conv1d" || optype == "relax.nn.conv2d" || optype == "relax.nn.conv3d" ||
-      optype == "relax.nn.dense") {
+  if (optype == "broadcast_to" || optype == "reshape") {
+    input_types.push_back("input");
+    input_types.push_back("shape");
+  } else if (optype == "clip") {
+    input_types.push_back("input");
+    input_types.push_back("min");
+    input_types.push_back("max");
+  } else if (optype == "full") {
+    input_types.push_back("shape");
+    input_types.push_back("input");
+  } else if (optype == "image.resize2d") {
+    input_types.push_back("input");
+    input_types.push_back("size");
+  } else if (optype == "nn.conv1d" || optype == "nn.conv2d" || optype == "nn.conv3d") {
     input_types.push_back("input");
     input_types.push_back("weight");
-  } else if (optype == "relax.nn.batch_norm") {
+  } else if (optype == "nn.batch_norm") {
     input_types.push_back("input");
     input_types.push_back("gamma");
     input_types.push_back("beta");
     input_types.push_back("mean");
     input_types.push_back("var");
-  } else if (optype == "relax.nn.layer_norm") {
+  } else if (optype == "nn.layer_norm" || optype == "nn.group_norm") {
     input_types.push_back("input");
     input_types.push_back("gamma");
     input_types.push_back("beta");
+  } else if (optype == "msc.linear") {
+    input_types.push_back("weight");
+    input_types.push_back("input");
+  } else if (optype == "msc.conv1d_bias" || optype == "msc.conv2d_bias") {
+    input_types.push_back("input");
+    input_types.push_back("weight");
+    input_types.push_back("bias");
+    input_types.push_back("expand_bias");
+  } else if (optype == "msc.linear_bias") {
+    input_types.push_back("weight");
+    input_types.push_back("input");
+    input_types.push_back("bias");
+  } else if (optype == "msc.embedding" && inputs_num == 2) {
+    input_types.push_back("input");
+    input_types.push_back("weight");
+  } else if (optype == "msc.embedding" && inputs_num == 4) {
+    input_types.push_back("input");
+    input_types.push_back("reduce_in");
+    input_types.push_back("weight");
+    input_types.push_back("expand_out");
+  } else {
+    for (size_t i = 0; i < inputs_num; i++) {
+      input_types.push_back("input");
+    }
   }
+  ICHECK_EQ(input_types.size(), inputs_num)
+      << "Optype " << optype << " get input types " << input_types << " and inputs_num "
+      << inputs_num << " mismatch";
   return input_types;
 }
 
 const Array<String> ExprUtils::GetInputTypes(const RelaxCall& call) {
-  const String& optype = Downcast<Op>(call->op)->name;
-  Array<String> input_types = GetInputTypes(optype);
-  if (input_types.size() == 0) {
-    for (size_t i = 0; i < call->args.size(); i++) {
-      input_types.push_back("input");
-    }
-  }
-  ICHECK_EQ(input_types.size(), call->args.size()) << "Input types and args size mismatch";
-  return input_types;
+  const String& optype = StringUtils::Replace(Downcast<Op>(call->op)->name, "relax.", "");
+  return GetInputTypes(optype, call->args.size());
 }
 
 const Array<String> ExprUtils::GetInputTypes(const RelayCall& call) {
-  const String& optype = Downcast<Op>(call->op)->name;
-  Array<String> input_types = GetInputTypes(optype);
-  if (input_types.size() == 0) {
-    for (size_t i = 0; i < call->args.size(); i++) {
-      input_types.push_back("input");
-    }
-  }
-  ICHECK_EQ(input_types.size(), call->args.size()) << "Input types and args size mismatch";
-  return input_types;
+  const String& optype = StringUtils::Replace(Downcast<Op>(call->op)->name, "relay.", "");
+  return GetInputTypes(optype, call->args.size());
 }
 
 TVM_REGISTER_GLOBAL("msc.core.SpanGetAttr").set_body_typed(SpanUtils::GetAttr);

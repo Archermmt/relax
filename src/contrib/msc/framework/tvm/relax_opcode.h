@@ -77,8 +77,12 @@ class RelaxOpCodeGen : public BaseOpCodeGen<RelaxCodeDenConfig> {
   /*! \brief Convert node to docs*/
   const Array<Doc> GetDocs() final;
 
+ protected:
   /*! \brief Convert op build*/
-  virtual void CodeGenBuild(RelaxOpCodeStack& stack);
+  virtual void CodeGenBuild(RelaxOpCodeStack& stack) = 0;
+
+  /*! \brief coda stack emit docs*/
+  void BuilderEmit(RelaxOpCodeStack& stack, const String& ret, const String& name = "");
 };
 
 /*!

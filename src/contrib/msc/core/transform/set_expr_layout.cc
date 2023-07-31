@@ -42,8 +42,16 @@ NLayout InferNLayout(const Expr& expr, const VarLayoutMap& var_layout_map) {
 }
 
 LayoutDecision InferLayoutDecision(const Expr& expr, const VarLayoutMap& var_layout_map) {
-  NLayout nlayout = InferNLayout(expr, var_layout_map);
+  const auto& nlayout = InferNLayout(expr, var_layout_map);
   ICHECK(nlayout.IsLeaf()) << "Cannot get layout for " << expr;
+  return nlayout.LeafValue();
+}
+
+LayoutDecision InferLayoutDecisionAt(const Expr& expr, const VarLayoutMap& var_layout_map,
+                                     size_t index = 0) {
+  const auto& nlayouts = InferNLayout(expr, var_layout_map);
+  const auto& nlayout = nlayouts.NestedArray()[0];
+  ICHECK(nlayout.IsLeaf()) << "Cannot get output layout for " << expr;
   return nlayout.LeafValue();
 }
 
@@ -58,6 +66,7 @@ std::tuple<int64_t, int64_t> AccumulateMatch(const std::vector<int64_t>& in_shap
   int64_t out_accumulate = 1;
   for (size_t i = in_start; i < in_shape.size(); i++) {
     in_accumulate *= in_shape[i];
+    out_accumulate = 1;
     for (size_t j = out_start; j < out_shape.size(); j++) {
       out_accumulate *= out_shape[j];
       if (in_accumulate == out_accumulate) {
@@ -106,7 +115,7 @@ std::vector<size_t> InferReduceAxes(const Array<PrimExpr>& input_shape,
       if (in_pos == -1) {
         return std::vector<size_t>();
       }
-      for (size_t i = out_start; i < out_pos; i++) {
+      for (size_t i = out_start; i < out_pos + 1; i++) {
         out_axes.push_back(i + 1);
       }
       start = in_pos + 1;
@@ -149,8 +158,8 @@ std::vector<size_t> InferExpandAxes(const Array<PrimExpr>& input_shape,
         return std::vector<size_t>();
       }
       size_t expand_size = out_pos - in_pos - expand_axes.size();
-      for (size_t i = out_start; i < expand_size; i++) {
-        expand_axes.push_back(i + 1);
+      for (size_t i = 0; i < expand_size; i++) {
+        expand_axes.push_back(out_start + i);
       }
       start = in_pos + 1;
     }
@@ -161,40 +170,10 @@ std::vector<size_t> InferExpandAxes(const Array<PrimExpr>& input_shape,
   return expand_axes;
 }
 
-// Forward Infer
-InferLayoutOutput ForwardInferLayoutCommon(const Call& call,
-                                           const Map<String, Array<String>>& desired_layouts,
-                                           const VarLayoutMap& var_layout_map) {
-  Array<NLayout> input_layouts;
-  NLayout layout_hint;
-  for (const auto& arg : call->args) {
-    const auto& in_layout = InferNLayout(arg, var_layout_map);
-    if (in_layout.IsLeaf() && in_layout.LeafValue()->layout.defined()) {
-      layout_hint = in_layout;
-    }
-    input_layouts.push_back(in_layout);
-  }
-
-  if (!layout_hint.defined()) {
-    return InferLayoutOutput();
-  }
-  std::vector<NLayout> output_layouts;
-  auto sinfo = GetStructInfo(call);
-  if (sinfo.as<TensorStructInfoNode>()) {
-    output_layouts.push_back(layout_hint);
-  } else if (const auto* tuple_sinfo = sinfo.as<TupleStructInfoNode>()) {
-    for (size_t i = 0; i < tuple_sinfo->fields.size(); i++) {
-      output_layouts.push_back(layout_hint);
-    }
-  } else {
-    return InferLayoutOutput();
-  }
-  return InferLayoutOutput(input_layouts, {output_layouts}, Attrs());
-}
-
-InferLayoutOutput InferLayoutConv(const Call& call,
-                                  const Map<String, Array<String>>& desired_layouts,
-                                  const VarLayoutMap& var_layout_map) {
+// Forward and Backward infer
+InferLayoutOutput MSCInferLayoutConv(const Call& call,
+                                     const Map<String, Array<String>>& desired_layouts,
+                                     const VarLayoutMap& var_layout_map) {
   LayoutDecision data_layout, kernel_layout, out_layout;
   const String& op_name = Downcast<Op>(call->op)->name;
   if (op_name == "relax.nn.conv1d") {
@@ -211,6 +190,228 @@ InferLayoutOutput InferLayoutConv(const Call& call,
   return InferLayoutOutput({data_layout, kernel_layout}, {out_layout}, Attrs());
 }
 
+InferLayoutOutput MSCInferLayoutPool2d(const Call& call,
+                                       const Map<String, Array<String>>& desired_layouts,
+                                       const VarLayoutMap& var_layout_map) {
+  LayoutDecision layout, out_layout;
+  const String& op_name = Downcast<Op>(call->op)->name;
+  if (op_name == "relax.nn.adaptive_avg_pool2d") {
+    const auto* attrs = call->attrs.as<AdaptivePool2DAttrs>();
+    layout = LayoutDecision(attrs->layout);
+    out_layout = LayoutDecision(attrs->out_layout);
+  } else {
+    const auto* attrs = call->attrs.as<Pool2DAttrs>();
+    layout = LayoutDecision(attrs->layout);
+    out_layout = LayoutDecision(attrs->out_layout);
+  }
+  return InferLayoutOutput({layout}, {out_layout}, Attrs());
+}
+
+// Forward Infer
+InferLayoutOutput ForwardInferLayoutCommon(const Call& call,
+                                           const Map<String, Array<String>>& desired_layouts,
+                                           const VarLayoutMap& var_layout_map) {
+  Array<NLayout> input_layouts;
+  LayoutDecision layout_hint;
+  for (const auto& arg : call->args) {
+    const auto& in_layout = InferLayoutDecision(arg, var_layout_map);
+    if (in_layout->layout.defined()) {
+      layout_hint = in_layout;
+    }
+    input_layouts.push_back(in_layout);
+  }
+  if (!layout_hint.defined()) {
+    return InferLayoutOutput();
+  }
+  std::vector<NLayout> output_layouts;
+  const auto& sinfo = GetStructInfo(call);
+  if (sinfo.as<TensorStructInfoNode>()) {
+    output_layouts.push_back(layout_hint);
+  } else if (const auto* tuple_sinfo = sinfo.as<TupleStructInfoNode>()) {
+    for (size_t i = 0; i < tuple_sinfo->fields.size(); i++) {
+      output_layouts.push_back(layout_hint);
+    }
+  } else {
+    return InferLayoutOutput();
+  }
+  return InferLayoutOutput(input_layouts, {output_layouts}, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutBinary(const Call& call,
+                                           const Map<String, Array<String>>& desired_layouts,
+                                           const VarLayoutMap& var_layout_map) {
+  const auto& output = ForwardInferLayoutCommon(call, desired_layouts, var_layout_map);
+  if (!output.defined()) {
+    return output;
+  }
+  std::vector<NLayout> input_layouts;
+  for (size_t i = 0; i < call->args.size(); i++) {
+    const auto& sinfo = GetStructInfo(call->args[i]);
+    if (const auto* t_info = sinfo.as<TensorStructInfoNode>()) {
+      if (t_info->ndim == 0) {
+        input_layouts.push_back(LayoutDecision(""));
+      } else {
+        input_layouts.push_back(output->input_layouts[i]);
+      }
+    } else {
+      LOG(FATAL) << "Binary input should be tensor, get " << sinfo->GetTypeKey();
+    }
+  }
+  return InferLayoutOutput(input_layouts, output->output_layouts, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutInplace(const Call& call,
+                                            const Map<String, Array<String>>& desired_layouts,
+                                            const VarLayoutMap& var_layout_map) {
+  return ForwardInferLayoutCommon(call, desired_layouts, var_layout_map);
+}
+
+InferLayoutOutput ForwardInferLayoutBatchNorm(const Call& call,
+                                              const Map<String, Array<String>>& desired_layouts,
+                                              const VarLayoutMap& var_layout_map) {
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision in_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!in_layout->layout.defined()) {
+    if (input_shape.size() == 4) {
+      in_layout = LayoutDecision("NCHW");
+    } else if (input_shape.size() == 3) {
+      in_layout = LayoutDecision("NCD");
+    }
+  }
+  LayoutDecision g_layout = LayoutDecision("O");
+  return InferLayoutOutput({in_layout, g_layout, g_layout, g_layout, g_layout},
+                           {{in_layout, g_layout, g_layout}}, Attrs());
+}
+
+InferLayoutOutput ForkwardInferLayoutExpandDims(const Call& call,
+                                                const Map<String, Array<String>>& desired_layouts,
+                                                const VarLayoutMap& var_layout_map) {
+  LayoutDecision input_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!input_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<ExpandDimsAttrs>();
+  std::vector<size_t> expand_axes;
+  for (const auto& s : attrs->axis) {
+    expand_axes.push_back(CommonUtils::GetIndex(s->value, input_shape.size()));
+  }
+  LayoutDecision output_layout = LayoutUtils::ExpandLayout(input_layout, expand_axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutNormalize(const Call& call,
+                                              const Map<String, Array<String>>& desired_layouts,
+                                              const VarLayoutMap& var_layout_map) {
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision in_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!in_layout->layout.defined()) {
+    if (input_shape.size() == 4) {
+      in_layout = LayoutDecision("NCHW");
+    } else if (input_shape.size() == 3) {
+      in_layout = LayoutDecision("NCD");
+    }
+  }
+  LayoutDecision g_layout = LayoutDecision("O");
+  return InferLayoutOutput({in_layout, g_layout, g_layout}, {in_layout}, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutMatmul(const Call& call,
+                                           const Map<String, Array<String>>& desired_layouts,
+                                           const VarLayoutMap& var_layout_map) {
+  Array<PrimExpr> empty;
+  const auto& a_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  const auto& b_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[1]))->GetShape().value_or(empty);
+
+  if (a_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision a_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!a_layout->layout.defined()) {
+    if (a_shape.size() == 4) {
+      a_layout = LayoutDecision("NCHW");
+    } else if (a_shape.size() == 3) {
+      a_layout = LayoutDecision("NCD");
+    } else if (a_shape.size() == 2) {
+      a_layout = LayoutDecision("NC");
+    }
+  }
+  size_t start = a_layout->layout.ndim() - b_shape.size();
+  String pre_layout;
+  for (size_t i = start; i < a_layout->layout.ndim() - 2; i++) {
+    pre_layout = pre_layout + a_layout->layout[i].name();
+  }
+  LayoutDecision b_layout = LayoutDecision(pre_layout + "IO");
+  return InferLayoutOutput({a_layout, b_layout}, {a_layout}, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutPermute(const Call& call,
+                                            const Map<String, Array<String>>& desired_layouts,
+                                            const VarLayoutMap& var_layout_map) {
+  LayoutDecision input_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!input_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  std::vector<size_t> permute_axes;
+  const auto* attrs = call->attrs.as<PermuteDimsAttrs>();
+  if (!attrs->axes.defined()) {
+    for (size_t i = input_layout->layout.ndim(); i > 0; i--) {
+      permute_axes.push_back(i - 1);
+    }
+  } else {
+    for (const auto& a : attrs->axes.value()) {
+      permute_axes.push_back(a->value);
+    }
+  }
+  LayoutDecision output_layout = LayoutUtils::PermuteLayout(input_layout, permute_axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput ForwardInferLayoutReduceAxis(const Call& call,
+                                               const Map<String, Array<String>>& desired_layouts,
+                                               const VarLayoutMap& var_layout_map) {
+  LayoutDecision input_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!input_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<StatisticalAttrs>();
+  if (attrs->keepdims) {
+    return InferLayoutOutput({input_layout}, {input_layout}, Attrs());
+  }
+  if (!attrs->axis.defined()) {
+    return InferLayoutOutput({input_layout}, {LayoutDecision("")}, Attrs());
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  std::vector<size_t> axes;
+  for (const auto& s : attrs->axis.value()) {
+    axes.push_back(CommonUtils::GetIndex(s->value, input_shape.size()));
+  }
+  LayoutDecision output_layout = LayoutUtils::ReduceLayout(input_layout, axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
+
 InferLayoutOutput ForwardInferLayoutReshape(const Call& call,
                                             const Map<String, Array<String>>& desired_layouts,
                                             const VarLayoutMap& var_layout_map) {
@@ -218,33 +419,191 @@ InferLayoutOutput ForwardInferLayoutReshape(const Call& call,
   if (!input_layout->layout.defined()) {
     return InferLayoutOutput();
   }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  const auto& output_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call))->GetShape().value_or(empty);
+  if (input_shape.size() == 0 || output_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
   LayoutDecision output_layout;
+  if (input_shape.size() == output_shape.size()) {
+    output_layout = input_layout;
+  } else if (input_shape.size() > output_shape.size()) {
+    const auto& reduce_axes = InferReduceAxes(input_shape, output_shape);
+    if (reduce_axes.size() == 0) {
+      return InferLayoutOutput();
+    }
+    output_layout = LayoutUtils::ReduceLayout(input_layout, reduce_axes);
+  } else {
+    const auto& expand_axes = InferExpandAxes(input_shape, output_shape);
+    if (expand_axes.size() == 0) {
+      return InferLayoutOutput();
+    }
+    output_layout = LayoutUtils::ExpandLayout(input_layout, expand_axes);
+  }
+  return InferLayoutOutput({input_layout, LayoutDecision("O")}, {output_layout}, Attrs());
+}
 
+InferLayoutOutput ForwardInferLayoutSqueeze(const Call& call,
+                                            const Map<String, Array<String>>& desired_layouts,
+                                            const VarLayoutMap& var_layout_map) {
+  LayoutDecision input_layout = InferLayoutDecision(call->args[0], var_layout_map);
+  if (!input_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<SqueezeAttrs>();
+  std::vector<size_t> reduce_axes;
+  if (attrs->axis.defined()) {
+    for (const auto& s : attrs->axis.value()) {
+      size_t v_index = CommonUtils::GetIndex(s->value, input_shape.size());
+      if (Downcast<Integer>(input_shape[v_index])->value == 1) {
+        reduce_axes.push_back(v_index);
+      }
+    }
+  } else {
+    for (size_t i = 0; i < input_shape.size(); i++) {
+      if (Downcast<Integer>(input_shape[i])->value == 1) {
+        reduce_axes.push_back(i);
+      }
+    }
+  }
+  LayoutDecision output_layout = LayoutUtils::ReduceLayout(input_layout, reduce_axes);
   return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
 }
 
-TVM_REGISTER_OP("relax.nn.conv1d")
-    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", InferLayoutConv);
-TVM_REGISTER_OP("relax.nn.conv2d")
-    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", InferLayoutConv);
+InferLayoutOutput ForwardInferLayoutTake(const Call& call,
+                                         const Map<String, Array<String>>& desired_layouts,
+                                         const VarLayoutMap& var_layout_map) {
+  LayoutDecision input_layout = InferLayoutDecision(call->args[1], var_layout_map);
+  if (!input_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision output_layout = LayoutUtils::ExpandLayout(input_layout, std::vector<size_t>{0});
+  return InferLayoutOutput({LayoutDecision("WE"), input_layout}, {output_layout}, Attrs());
+}
 
+TVM_REGISTER_OP("relax.nn.conv1d")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", MSCInferLayoutConv);
+TVM_REGISTER_OP("relax.nn.conv2d")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", MSCInferLayoutConv);
+TVM_REGISTER_OP("relax.nn.max_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", MSCInferLayoutPool2d);
+TVM_REGISTER_OP("relax.nn.avg_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", MSCInferLayoutPool2d);
+TVM_REGISTER_OP("relax.nn.adaptive_avg_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", MSCInferLayoutPool2d);
+// reduce axis ops
+TVM_REGISTER_OP("relax.argmax")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.argmin")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.max")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.min")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.mean")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.sum")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.prod")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.std")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReduceAxis);
+// binary ops
+TVM_REGISTER_OP("relax.add")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.divide")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.floor_divide")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.multiply")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.power")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.subtract")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.equal")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.greater")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.greater_equal")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.less")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.less_equal")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.not_equal")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.maximum")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.minimum")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.logical_and")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.logical_or")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.logical_xor")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.bitwise_and")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.bitwise_or")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+TVM_REGISTER_OP("relax.bitwise_xor")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBinary);
+// math ops
+TVM_REGISTER_OP("relax.expand_dims")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForkwardInferLayoutExpandDims);
+TVM_REGISTER_OP("relax.matmul")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutMatmul);
+TVM_REGISTER_OP("relax.permute_dims")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutPermute);
 TVM_REGISTER_OP("relax.reshape")
     .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutReshape);
+TVM_REGISTER_OP("relax.squeeze")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutSqueeze);
+TVM_REGISTER_OP("relax.take")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutTake);
+// nn ops
+TVM_REGISTER_OP("relax.nn.batch_norm")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutBatchNorm);
+TVM_REGISTER_OP("relax.nn.group_norm")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutNormalize);
+TVM_REGISTER_OP("relax.nn.layer_norm")
+    .set_attr<FRelaxInferLayout>("FMSCForwardInferLayout", ForwardInferLayoutNormalize);
 
 // Backward Infer
 InferLayoutOutput BackwardInferLayoutCommon(const Call& call,
                                             const Map<String, Array<String>>& desired_layouts,
                                             const VarLayoutMap& var_layout_map) {
   NLayout output_layout = InferNLayout(call, var_layout_map);
-  if (!output_layout.LeafValue()->layout.defined()) {
+  LayoutDecision layout_hint;
+  if (output_layout.IsLeaf()) {
+    layout_hint = output_layout.LeafValue();
+  } else {
+    for (const auto& l : output_layout.NestedArray()) {
+      if (l.IsLeaf() && l.LeafValue()->layout.defined()) {
+        layout_hint = l.LeafValue();
+      }
+    }
+  }
+  if (!layout_hint->layout.defined()) {
     return InferLayoutOutput();
   }
   Array<NLayout> input_layouts;
   for (const auto& arg : call->args) {
-    if (arg.as<VarNode>() && var_layout_map.count(Downcast<Var>(arg))) {
-      input_layouts.push_back(GetNLayout(var_layout_map, arg));
+    const auto& saved_layout = InferLayoutDecision(arg, var_layout_map);
+    if (saved_layout->layout.defined()) {
+      input_layouts.push_back(saved_layout);
     } else {
-      input_layouts.push_back(output_layout);
+      input_layouts.push_back(layout_hint);
     }
   }
   return InferLayoutOutput(input_layouts, {output_layout}, Attrs());
@@ -253,7 +612,153 @@ InferLayoutOutput BackwardInferLayoutCommon(const Call& call,
 InferLayoutOutput BackwardInferLayoutBinary(const Call& call,
                                             const Map<String, Array<String>>& desired_layouts,
                                             const VarLayoutMap& var_layout_map) {
+  const auto& output = BackwardInferLayoutCommon(call, desired_layouts, var_layout_map);
+  if (!output.defined()) {
+    return output;
+  }
+  std::vector<NLayout> input_layouts;
+  for (size_t i = 0; i < call->args.size(); i++) {
+    const auto& sinfo = GetStructInfo(call->args[i]);
+    if (const auto* t_info = sinfo.as<TensorStructInfoNode>()) {
+      if (t_info->ndim == 0) {
+        input_layouts.push_back(LayoutDecision(""));
+      } else {
+        input_layouts.push_back(output->input_layouts[i]);
+      }
+    } else {
+      LOG(FATAL) << "Binary input should be tensor, get " << sinfo->GetTypeKey();
+    }
+  }
+  return InferLayoutOutput(input_layouts, output->output_layouts, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutInplace(const Call& call,
+                                             const Map<String, Array<String>>& desired_layouts,
+                                             const VarLayoutMap& var_layout_map) {
   return BackwardInferLayoutCommon(call, desired_layouts, var_layout_map);
+}
+
+InferLayoutOutput BackwardInferLayoutBatchNorm(const Call& call,
+                                               const Map<String, Array<String>>& desired_layouts,
+                                               const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecisionAt(call, var_layout_map, 0);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision g_layout = LayoutDecision("O");
+  return InferLayoutOutput({output_layout, g_layout, g_layout, g_layout, g_layout},
+                           {{output_layout, g_layout, g_layout}}, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutExpandDims(const Call& call,
+                                                const Map<String, Array<String>>& desired_layouts,
+                                                const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<ExpandDimsAttrs>();
+  std::vector<size_t> expand_axes;
+  for (const auto& s : attrs->axis) {
+    expand_axes.push_back(CommonUtils::GetIndex(s->value, input_shape.size()));
+  }
+  LayoutDecision input_layout = LayoutUtils::ReduceLayout(output_layout, expand_axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutNormalize(const Call& call,
+                                               const Map<String, Array<String>>& desired_layouts,
+                                               const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecisionAt(call, var_layout_map, 0);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision g_layout = LayoutDecision("O");
+  return InferLayoutOutput({output_layout, g_layout, g_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutMatmul(const Call& call,
+                                            const Map<String, Array<String>>& desired_layouts,
+                                            const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  Array<PrimExpr> empty;
+  const auto& b_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[1]))->GetShape().value_or(empty);
+  if (b_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  size_t start = output_layout->layout.ndim() - b_shape.size();
+  String pre_layout;
+  for (size_t i = start; i < output_layout->layout.ndim() - 2; i++) {
+    pre_layout = pre_layout + output_layout->layout[i].name();
+  }
+  LayoutDecision b_layout = LayoutDecision(pre_layout + "IO");
+  return InferLayoutOutput({output_layout, b_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutPermute(const Call& call,
+                                             const Map<String, Array<String>>& desired_layouts,
+                                             const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  std::vector<size_t> permute_axes;
+  const auto* attrs = call->attrs.as<PermuteDimsAttrs>();
+  if (!attrs->axes.defined()) {
+    for (size_t i = output_layout->layout.ndim(); i > 0; i--) {
+      permute_axes.push_back(i - 1);
+    }
+  } else {
+    std::vector<int> attr_axes;
+    for (const auto& s : attrs->axes.value()) {
+      attr_axes.push_back(s->value);
+    }
+    for (size_t i = 0; i < output_layout->layout.ndim(); i++) {
+      int pos = ArrayUtils::IndexOf(attr_axes, static_cast<int>(i));
+      if (pos >= 0) {
+        permute_axes.push_back(pos);
+      } else {
+        permute_axes.push_back(i);
+      }
+    }
+  }
+  LayoutDecision input_layout = LayoutUtils::PermuteLayout(output_layout, permute_axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
+
+InferLayoutOutput BackwardInferLayoutReduceAxis(const Call& call,
+                                                const Map<String, Array<String>>& desired_layouts,
+                                                const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<StatisticalAttrs>();
+  if (attrs->keepdims) {
+    return InferLayoutOutput({output_layout}, {output_layout}, Attrs());
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  std::vector<size_t> axes;
+  for (const auto& s : attrs->axis.value()) {
+    axes.push_back(CommonUtils::GetIndex(s->value, input_shape.size()));
+  }
+  LayoutDecision input_layout = LayoutUtils::ExpandLayout(output_layout, axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
 }
 
 InferLayoutOutput BackwardInferLayoutReshape(const Call& call,
@@ -290,13 +795,78 @@ InferLayoutOutput BackwardInferLayoutReshape(const Call& call,
   return InferLayoutOutput({input_layout, LayoutDecision("O")}, {output_layout}, Attrs());
 }
 
-TVM_REGISTER_OP("relax.nn.conv1d")
-    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", InferLayoutConv);
-TVM_REGISTER_OP("relax.nn.conv2d")
-    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", InferLayoutConv);
-TVM_REGISTER_OP("relax.reshape")
-    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReshape);
+InferLayoutOutput BackwardInferLayoutSqueeze(const Call& call,
+                                             const Map<String, Array<String>>& desired_layouts,
+                                             const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  Array<PrimExpr> empty;
+  const auto& input_shape =
+      Downcast<TensorStructInfo>(GetStructInfo(call->args[0]))->GetShape().value_or(empty);
+  if (input_shape.size() == 0) {
+    return InferLayoutOutput();
+  }
+  const auto* attrs = call->attrs.as<SqueezeAttrs>();
+  std::vector<size_t> reduce_axes;
+  if (attrs->axis.defined()) {
+    for (const auto& s : attrs->axis.value()) {
+      size_t v_index = CommonUtils::GetIndex(s->value, input_shape.size());
+      if (Downcast<Integer>(input_shape[v_index])->value == 1) {
+        reduce_axes.push_back(v_index);
+      }
+    }
+  } else {
+    for (size_t i = 0; i < input_shape.size(); i++) {
+      if (Downcast<Integer>(input_shape[i])->value == 1) {
+        reduce_axes.push_back(i);
+      }
+    }
+  }
+  LayoutDecision input_layout = LayoutUtils::ExpandLayout(output_layout, reduce_axes);
+  return InferLayoutOutput({input_layout}, {output_layout}, Attrs());
+}
 
+InferLayoutOutput BackwardInferLayoutTake(const Call& call,
+                                          const Map<String, Array<String>>& desired_layouts,
+                                          const VarLayoutMap& var_layout_map) {
+  LayoutDecision output_layout = InferLayoutDecision(call, var_layout_map);
+  if (!output_layout->layout.defined()) {
+    return InferLayoutOutput();
+  }
+  LayoutDecision input_layout = LayoutUtils::ReduceLayout(output_layout, std::vector<size_t>{0});
+  return InferLayoutOutput({LayoutDecision("WE"), input_layout}, {output_layout}, Attrs());
+}
+
+TVM_REGISTER_OP("relax.nn.conv1d")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", MSCInferLayoutConv);
+TVM_REGISTER_OP("relax.nn.conv2d")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", MSCInferLayoutConv);
+TVM_REGISTER_OP("relax.nn.max_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", MSCInferLayoutPool2d);
+TVM_REGISTER_OP("relax.nn.avg_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", MSCInferLayoutPool2d);
+TVM_REGISTER_OP("relax.nn.adaptive_avg_pool2d")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", MSCInferLayoutPool2d);
+// reduce axis ops
+TVM_REGISTER_OP("relax.argmax")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.argmin")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.max")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.min")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.mean")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.sum")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.prod")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+TVM_REGISTER_OP("relax.std")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReduceAxis);
+// binary ops
 TVM_REGISTER_OP("relax.add")
     .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutBinary);
 TVM_REGISTER_OP("relax.divide")
@@ -337,10 +907,30 @@ TVM_REGISTER_OP("relax.bitwise_or")
     .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutBinary);
 TVM_REGISTER_OP("relax.bitwise_xor")
     .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutBinary);
+// math ops
+TVM_REGISTER_OP("relax.expand_dims")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutExpandDims);
+TVM_REGISTER_OP("relax.matmul")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutMatmul);
+TVM_REGISTER_OP("relax.permute_dims")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutPermute);
+TVM_REGISTER_OP("relax.reshape")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutReshape);
+TVM_REGISTER_OP("relax.squeeze")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutSqueeze);
+TVM_REGISTER_OP("relax.take")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutTake);
+// nn ops
+TVM_REGISTER_OP("relax.nn.batch_norm")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutBatchNorm);
+TVM_REGISTER_OP("relax.nn.group_norm")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutNormalize);
+TVM_REGISTER_OP("relax.nn.layer_norm")
+    .set_attr<FRelaxInferLayout>("FMSCBackwardInferLayout", BackwardInferLayoutNormalize);
 
 class LayoutInfer : public ExprVisitor {
  public:
-  explicit LayoutInfer() { Reset(); }
+  explicit LayoutInfer(const IRModule& ref_module) : ref_module_(ref_module) { Reset(); }
 
   void Reset() {
     infered_ = false;
@@ -397,63 +987,136 @@ class LayoutInfer : public ExprVisitor {
       Op op = Downcast<Op>(GetRef<Op>(op_node));
       InferLayoutOutput infered_layout;
       const auto msc_infer_map = Op::GetAttrMap<FRelaxInferLayout>("FMSCBackwardInferLayout");
-      if (msc_infer_map.count(op)) {
-        FRelaxInferLayout f = msc_infer_map[op];
-        infered_layout = f(call, Map<String, Array<String>>(), var_layout_map_);
-      }
-      if (infered_layout.defined() && infered_layout->input_layouts.size() == call->args.size()) {
-        for (size_t i = 0; i < infered_layout->input_layouts.size(); i++) {
-          const auto& in_layout = infered_layout->input_layouts[i];
-          if (call->args[i].as<VarNode>() && var_map_.count(Downcast<Var>(call->args[i]))) {
-            const auto& p_expr = var_map_[Downcast<Var>(call->args[i])];
-            if (!LayoutUtils::LayoutInfered(p_expr) && LayoutUtils::SetLayout(p_expr, in_layout)) {
-              infered_ = true;
-            }
-          } else if (LayoutUtils::SetLayout(call->args[i], in_layout)) {
-            infered_ = true;
-          }
+      try {
+        if (msc_infer_map.count(op)) {
+          FRelaxInferLayout f = msc_infer_map[op];
+          infered_layout = f(call, Map<String, Array<String>>(), var_layout_map_);
+        } else {
+          infered_layout =
+              BackwardInferLayoutCommon(call, Map<String, Array<String>>(), var_layout_map_);
         }
+      } catch (runtime::InternalError& err) {
+        LOG(WARNING) << "Failed to backward infer layout " << expr << " : " << err.message();
+        infered_layout = InferLayoutOutput();
+      }
+      try {
+        if (infered_layout.defined()) {
+          SetInputLayouts(infered_layout->input_layouts, call);
+        }
+      } catch (runtime::InternalError& err) {
+        LOG(WARNING) << "Failed to backward set inputs layout for " << call << " : "
+                     << err.message();
       }
     }
   }
 
-  void VisitBinding_(const VarBindingNode* binding, const CallNode* call_node) final {
-    bool infer_outputs = true;
-    RecordExpr(binding->var, GetRef<Call>(call_node));
-    if (LayoutUtils::LayoutInfered(GetRef<Call>(call_node))) {
-      infer_outputs = false;
-    }
-    if (call_node->args.size() == 0 || !call_node->op.as<OpNode>() ||
-        LayoutUtils::HasUnknownDimTensor(call_node->args)) {
-      infer_outputs = false;
-    }
-    const OpNode* op_node = call_node->op.as<OpNode>();
-    if (op_node == nullptr) {
-      infer_outputs = false;
-    }
-    if (infer_outputs) {
-      // infer layouts
-      Op op = Downcast<Op>(GetRef<Op>(op_node));
-      InferLayoutOutput infered_layout;
-      const auto msc_infer_map = Op::GetAttrMap<FRelaxInferLayout>("FMSCForwardInferLayout");
-      const auto relax_infer_map = Op::GetAttrMap<FRelaxInferLayout>("FRelaxInferLayout");
-      if (msc_infer_map.count(op)) {
-        FRelaxInferLayout f = msc_infer_map[op];
-        infered_layout = f(GetRef<Call>(call_node), Map<String, Array<String>>(), var_layout_map_);
-      } else if (relax_infer_map.count(op)) {
-        FRelaxInferLayout f = relax_infer_map[op];
-        infered_layout = f(GetRef<Call>(call_node), Map<String, Array<String>>(), var_layout_map_);
-      }
-      if (infered_layout.defined() && infered_layout->output_layouts.size() == 1) {
-        var_layout_map_[binding->var] = infered_layout->output_layouts[0];
-        if (LayoutUtils::SetLayout(GetRef<Call>(call_node), infered_layout->output_layouts[0])) {
+  void SetInputLayouts(const Array<NLayout>& input_layouts, const Call& call) {
+    if (input_layouts.size() == call->args.size()) {
+      for (size_t i = 0; i < input_layouts.size(); i++) {
+        if (call->args[i].as<VarNode>()) {
+          const auto& var = Downcast<Var>(call->args[i]);
+          var_layout_map_[var] = input_layouts[i];
+          if (var_map_.count(var)) {
+            if (LayoutUtils::SetLayout(var_map_[var], input_layouts[i])) {
+              infered_ = true;
+            }
+          } else if (LayoutUtils::SetLayout(var, input_layouts[i])) {
+            infered_ = true;
+          }
+        } else if (LayoutUtils::SetLayout(call->args[i], input_layouts[i])) {
           infered_ = true;
         }
       }
     }
   }
 
+  void VisitBinding_(const VarBindingNode* binding, const CallNode* call_node) final {
+    ExprVisitor::VisitBinding_(binding, call_node);
+    const auto& call = GetRef<Call>(call_node);
+    if (const auto* v_node = call->op.as<GlobalVarNode>()) {
+      // infer global func and set var layouts
+      const auto& func = Downcast<Function>(ref_module_->Lookup(v_node->name_hint));
+      Infer(func);
+      for (size_t i = 0; i < func->params.size(); i++) {
+        if (var_layout_map_.count(func->params[i]) &&
+            LayoutUtils::SetLayout(call->args[i], var_layout_map_[func->params[i]])) {
+          infered_ = true;
+        }
+      }
+      if (const auto* b_node = func->body.as<relax::SeqExprNode>()) {
+        var_layout_map_[binding->var] = GetNLayout(var_layout_map_, b_node->body);
+        if (LayoutUtils::SetLayout(call, var_layout_map_[binding->var])) {
+          infered_ = true;
+        }
+      } else {
+        LOG(FATAL) << "Function body should be SeqExpr, get " << func->body;
+      }
+    } else {
+      // infer call
+      bool infer_outputs = true;
+      RecordExpr(binding->var, call);
+      if (LayoutUtils::LayoutInfered(call)) {
+        infer_outputs = false;
+      }
+      if (call->args.size() == 0 || !call->op.as<OpNode>() ||
+          LayoutUtils::HasUnknownDimTensor(call->args)) {
+        infer_outputs = false;
+      }
+      const OpNode* op_node = call->op.as<OpNode>();
+      if (op_node == nullptr) {
+        infer_outputs = false;
+      }
+      if (infer_outputs) {
+        // infer layouts
+        Op op = Downcast<Op>(GetRef<Op>(op_node));
+        InferLayoutOutput infered_layout;
+        const auto msc_infer_map = Op::GetAttrMap<FRelaxInferLayout>("FMSCForwardInferLayout");
+        const auto relax_infer_map = Op::GetAttrMap<FRelaxInferLayout>("FRelaxInferLayout");
+        bool set_inputs = true;
+        try {
+          if (msc_infer_map.count(op)) {
+            FRelaxInferLayout f = msc_infer_map[op];
+            infered_layout = f(call, Map<String, Array<String>>(), var_layout_map_);
+          } else if (!relax_infer_map.count(op)) {
+            infered_layout =
+                ForwardInferLayoutCommon(call, Map<String, Array<String>>(), var_layout_map_);
+          }
+          if (relax_infer_map.count(op) && !infered_layout.defined()) {
+            FRelaxInferLayout f = relax_infer_map[op];
+            infered_layout = f(call, Map<String, Array<String>>(), var_layout_map_);
+            set_inputs = false;
+          }
+
+        } catch (runtime::InternalError& err) {
+          LOG(WARNING) << "Failed to forward infer layout for " << binding->var << " : "
+                       << binding->value << ", reason: " << err.message();
+          infered_layout = InferLayoutOutput();
+        }
+        if (infered_layout.defined() && infered_layout->output_layouts.size() == 1) {
+          try {
+            var_layout_map_[binding->var] = infered_layout->output_layouts[0];
+            if (LayoutUtils::SetLayout(call, var_layout_map_[binding->var])) {
+              infered_ = true;
+            }
+          } catch (runtime::InternalError& err) {
+            LOG(WARNING) << "Failed to forward set output layout for " << binding->var << " : "
+                         << binding->value << ", reason: " << err.message();
+          }
+        }
+        if (set_inputs && infered_layout.defined()) {
+          try {
+            SetInputLayouts(infered_layout->input_layouts, call);
+          } catch (runtime::InternalError& err) {
+            LOG(WARNING) << "Failed to forward set inputs layout for " << call << " : "
+                         << err.message();
+          }
+        }
+      }
+    }
+  }
+
   void VisitBinding_(const VarBindingNode* binding, const TupleNode* val) final {
+    ExprVisitor::VisitBinding_(binding, val);
     std::vector<NLayout> input_layout;
     for (const auto& field : val->fields) {
       if (binding->var->IsInstance<DataflowVarNode>()) {
@@ -471,6 +1134,7 @@ class LayoutInfer : public ExprVisitor {
   }
 
   void VisitBinding_(const VarBindingNode* binding, const TupleGetItemNode* val) final {
+    ExprVisitor::VisitBinding_(binding, val);
     NLayout input_layout = binding->var->IsInstance<DataflowVarNode>()
                                ? GetNLayout(var_layout_map_, val->tuple)
                                : InitialNLayout(val->tuple);
@@ -478,9 +1142,19 @@ class LayoutInfer : public ExprVisitor {
     RecordExpr(binding->var, GetRef<TupleGetItem>(val));
   }
 
+  void VisitBinding_(const VarBindingNode* binding, const ShapeExprNode* val) final {
+    ExprVisitor::VisitBinding_(binding, val);
+    const NLayout& out_layout = LayoutDecision("O");
+    var_layout_map_[binding->var] = out_layout;
+    if (LayoutUtils::SetLayout(GetRef<ShapeExpr>(val), out_layout)) {
+      infered_ = true;
+    }
+  }
+
   bool infered() { return infered_; }
 
  private:
+  IRModule ref_module_;
   bool infered_;
   Map<Var, Expr> var_map_;
   Array<Expr> ordered_exprs_;
@@ -514,23 +1188,23 @@ class LayoutChecker : public ExprVisitor {
   size_t missing_num_;
 };  // class LayoutChecker
 
-Expr SetExprLayout(const Expr& func, bool allow_missing) {
-  auto layout_infer = LayoutInfer();
+void SetExprLayout(const IRModule& ref_module, const Expr& func, bool allow_missing) {
+  auto layout_infer = LayoutInfer(ref_module);
   auto new_func = layout_infer.Infer(func);
   if (!allow_missing) {
     LayoutChecker().Check(new_func);
   }
-  return new_func;
 }
 
 namespace transform {
 
-Pass SetExprLayout(bool allow_missing) {
-  runtime::TypedPackedFunc<Function(Function, IRModule, PassContext)> pass_func =
-      [=](Function f, IRModule m, PassContext pc) {
-        return Downcast<Function>(SetExprLayout(f, allow_missing));
-      };
-  return CreateFunctionPass(pass_func, 1, "SetExprLayout", {});
+Pass SetExprLayout(bool allow_missing, const String& entry_name) {
+  runtime::TypedPackedFunc<IRModule(IRModule, PassContext)> pass_func = [=](IRModule m,
+                                                                            PassContext pc) {
+    relax::SetExprLayout(m, m->Lookup(entry_name), allow_missing);
+    return m;
+  };
+  return CreateModulePass(pass_func, 0, "SetExprLayout", {});
 }
 
 TVM_REGISTER_GLOBAL("relax.transform.SetExprLayout").set_body_typed(SetExprLayout);

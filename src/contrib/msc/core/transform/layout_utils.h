@@ -84,14 +84,22 @@ class LayoutUtils {
    * \return The new layout.
    */
   TVM_DLL static const LayoutDecision ExpandLayout(const LayoutDecision& src_layout,
-                                             const std::vector<size_t>& expand_axes);
+                                                   const std::vector<size_t>& expand_axes);
 
   /*!
    * \brief Delete axes from the Layout
    * \return The new layout.
    */
   TVM_DLL static const LayoutDecision ReduceLayout(const LayoutDecision& src_layout,
-                                             const std::vector<size_t>& reduce_axes);
+                                                   const std::vector<size_t>& reduce_axes);
+  /*!
+   * \brief Permute axes from the Layout
+   * \return The new layout.
+   */
+  TVM_DLL static const LayoutDecision PermuteLayout(const LayoutDecision& src_layout,
+                                                    const Array<Integer>& axes);
+  TVM_DLL static const LayoutDecision PermuteLayout(const LayoutDecision& src_layout,
+                                                    const std::vector<size_t>& axes);
 };
 
 }  // namespace msc

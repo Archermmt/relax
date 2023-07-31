@@ -79,24 +79,28 @@ void RelaxGraphCodeGen::CodeGenGraph() {
     }
     CodeGenNode(node);
   }
-  // end left scopes
-  for (size_t i = 0; i < scopes().size() - 1; i++) {
-    stack_.scope_end();
+  if (scopes().size() > 1) {
+    // end left scopes
+    for (size_t i = 0; i < scopes().size() - 1; i++) {
+      stack_.scope_end();
+    }
+  } else if (scopes().size() == 0) {
+    // start dataflow scope for non-scope graph
+    stack_.scope_start("block_builder.dataflow()");
   }
   // mark outputs
   stack_.comment("Emit the outputs");
-  Array<String> idx_outputs;
-  for (const auto& o : graph()->output_names) {
-    const auto& pair = graph()->FindProducerAndIdx(o);
-    const auto& idx_output = IdxOutput(pair.first, pair.second);
-    stack_.call_start("block_builder.emit_output").call_arg(idx_output).call_end(idx_output);
-    idx_outputs.push_back(idx_output);
+  Array<String> idx_exits;
+  for (const auto& e : graph()->GetExits()) {
+    const auto& idx_exit = IdxNode(e, false);
+    stack_.call_start("block_builder.emit_output").call_arg(idx_exit).call_end(idx_exit);
+    idx_exits.push_back(idx_exit);
   }
   stack_.scope_end().call_start("block_builder.emit_func_output");
-  if (idx_outputs.size() == 1) {
-    stack_.call_arg(idx_outputs[0]);
+  if (idx_exits.size() == 1) {
+    stack_.call_arg(idx_exits[0]);
   } else {
-    stack_.call_list_arg(idx_outputs);
+    stack_.call_list_arg(idx_exits);
   }
   stack_.call_end().scope_end().assign("mod", "block_builder.get()").func_end("mod");
 }
@@ -158,18 +162,22 @@ void RelaxGraphCodeGen::CodeGenInference() {
 }
 
 const Array<Doc> RelaxGraphCodeGen::GetOpCodes(const MSCJoint& node) {
-  auto it = GetRelaxOpCodeGens()->find(node->optype);
-  ICHECK(it != GetRelaxOpCodeGens()->end())
-      << "Unsupported relax op(" << node->optype << "): " << node;
+  const auto& ops_map = GetRelaxOpCodeGens();
+  auto it = ops_map->find(node->optype);
+  ICHECK(it != ops_map->end()) << "Unsupported relax op(" << node->optype << "): " << node;
   it->second->Config(node, config());
-  return it->second->GetDocs();
+  try {
+    return it->second->GetDocs();
+  } catch (runtime::InternalError& err) {
+    LOG(WARNING) << "Failed to get docs for " << node << " : " << err.message();
+    throw err;
+  }
 }
 
-TVM_REGISTER_GLOBAL("msc.tvm.GetRelaxSources")
+TVM_REGISTER_GLOBAL("msc.framework.tvm.GetRelaxSources")
     .set_body_typed([](const MSCGraph& graph, const String& codegen_config,
                        const String print_config) -> Map<String, String> {
       RelaxGraphCodeGen codegen = RelaxGraphCodeGen(graph, codegen_config);
-      codegen.CodeGen();
       return codegen.GetSources(print_config);
     });
 

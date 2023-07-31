@@ -63,7 +63,7 @@ class StringUtils {
   TVM_DLL static const String Join(const Array<String>& sub_strings, const String& joint);
 
   /*!
-   * \brief Replace the substring ole to new in String.
+   * \brief Replace the substring old to new in String.
    * \return The replaced String.
    */
   TVM_DLL static const String Replace(const String& src_string, const String& old_str,
@@ -106,6 +106,61 @@ class StringUtils {
 };
 
 /*!
+ * \brief Utils for Array.
+ */
+class ArrayUtils {
+ public:
+  /*!
+   * \brief Replace the element old to new in Array.
+   * \return The replaced Array.
+   */
+  template <typename T>
+  TVM_DLL static const Array<T> Replace(const Array<T>& src_array, const T& old_ele,
+                                        const T& new_ele) {
+    Array<T> new_array;
+    for (const auto& a : src_array) {
+      if (a == old_ele) {
+        new_array.push_back(new_ele);
+      } else {
+        new_array.push_back(a);
+      }
+    }
+    return new_array;
+  };
+
+  /*!
+   * \brief Find the index of element.
+   * \return The index, -1 if not founc.
+   */
+  /*
+  template <typename T>
+  TVM_DLL static int IndexOf(const Array<T>& array, const T& ele) {
+    std::cout << "ele type " << ele->GetTypeKey() << std::endl;
+    for (size_t i = 0; i < array.size(); i++) {
+      if (array[i] == ele) {
+        return i;
+      }
+    }
+    return -1;
+  };
+  */
+
+  /*!
+   * \brief Find the index of element.
+   * \return The index, -1 if not founc.
+   */
+  template <typename T>
+  TVM_DLL static int IndexOf(const std::vector<T>& array, const T& ele) {
+    for (size_t i = 0; i < array.size(); i++) {
+      if (array[i] == ele) {
+        return i;
+      }
+    }
+    return -1;
+  };
+};
+
+/*!
  * \brief Utils for Span.
  */
 class SpanUtils {
@@ -138,7 +193,7 @@ class ExprUtils {
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static const Array<String> GetInputTypes(const String& optype);
+  TVM_DLL static const Array<String> GetInputTypes(const String& optype, size_t inputs_num);
 
   /*!
    * \brief Get the input types of call.
@@ -151,6 +206,62 @@ class ExprUtils {
    * \return The input types.
    */
   TVM_DLL static const Array<String> GetInputTypes(const RelayCall& call);
+
+  /*!
+   * \brief Get the scalar value of ndarray.
+   * \return The scalar value.
+   */
+  template <typename T>
+  TVM_DLL static const T GetScalar(const runtime::NDArray& array, size_t i = 0) {
+    if (array->dtype.code == kDLInt) {
+      if (array->dtype.bits == 8) {
+        return T(reinterpret_cast<int8_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 16) {
+        return T(reinterpret_cast<int16_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 32) {
+        return T(reinterpret_cast<int32_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 64) {
+        return T(reinterpret_cast<int64_t*>(array->data)[i]);
+      }
+    } else if (array->dtype.code == kDLUInt) {
+      if (array->dtype.bits == 1) {  // bool
+        return T(reinterpret_cast<uint8_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 8) {
+        return T(reinterpret_cast<uint8_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 16) {
+        return T(reinterpret_cast<uint16_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 32) {
+        return T(reinterpret_cast<uint32_t*>(array->data)[i]);
+      } else if (array->dtype.bits == 64) {
+        return T(reinterpret_cast<uint64_t*>(array->data)[i]);
+      }
+    } else if (array->dtype.code == kDLFloat) {
+      if (array->dtype.bits == 32) {
+        return T(reinterpret_cast<float*>(array->data)[i]);
+      } else if (array->dtype.bits == 64) {
+        return T(reinterpret_cast<double*>(array->data)[i]);
+      }
+    }
+    LOG(FATAL) << "Failed to get scalar from array " << array;
+  }
+
+  /*!
+   * \brief Get the scalar value of relax constant.
+   * \return The scalar value.
+   */
+  template <typename T>
+  TVM_DLL static const T GetScalar(const relax::Constant& constant, size_t i = 0) {
+    return GetScalar<T>(constant->data, i);
+  }
+
+  /*!
+   * \brief Get the scalar value of relay constant.
+   * \return The scalar value.
+   */
+  template <typename T>
+  TVM_DLL static const T GetScalar(const relay::Constant& constant, size_t i = 0) {
+    return GetScalar<T>(constant->data, i);
+  }
 };
 
 }  // namespace msc

@@ -49,19 +49,8 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
   explicit PyGraphCodeGen(const MSCGraph& graph, const std::string& config = "")
       : BaseGraphCodeGen<ConfigType>(graph, config) {}
 
-  /*! \brief Get sources*/
-  virtual const Map<String, String> GetSources(const std::string& print_options = "") const {
-    Map<String, String> sources;
-    PythonPrinter printer(print_options);
-    for (const auto& d : this->GetDocs()) {
-      printer.Append(d);
-    }
-    sources.Set(this->graph()->name + ".py", printer.GetString());
-    return sources;
-  }
-
   /*! \brief Stack the docs for the script*/
-  virtual void CodeGen() {
+  virtual const Array<Doc> GetDocs() {
     CodeGenHeader();
     this->stack_.line().comment("Define the helpers");
     CodeGenHelper();
@@ -71,6 +60,18 @@ class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
       this->stack_.line().comment("Define the test");
       CodeGenTest();
     }
+    return this->stack_.GetDocs();
+  }
+
+  /*! \brief Get sources*/
+  virtual const Map<String, String> GetSources(const std::string& print_options = "") {
+    Map<String, String> sources;
+    PythonPrinter printer(print_options);
+    for (const auto& d : this->GetDocs()) {
+      printer.Append(d);
+    }
+    sources.Set(this->graph()->name + ".py", printer.GetString());
+    return sources;
   }
 
  protected:

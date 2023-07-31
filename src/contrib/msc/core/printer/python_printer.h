@@ -46,6 +46,9 @@ class PythonPrinter : public MSCBasePrinter {
   explicit PythonPrinter(const std::string& options = "") : MSCBasePrinter(options) {}
 
  protected:
+  /*! * \brief Print a LiteralDoc to python format*/
+  void PrintTypedDoc(const LiteralDoc& doc) final;
+
   /*! * \brief Print a AttrAccessDoc to python format*/
   void PrintTypedDoc(const AttrAccessDoc& doc) final;
 

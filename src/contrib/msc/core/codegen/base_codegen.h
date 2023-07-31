@@ -58,11 +58,6 @@ class BaseOpCodeGen {
     config_ = config;
   }
 
-  /*! \brief Convert node to docs*/
-  virtual const Array<Doc> GetDocs() = 0;
-
-  CODEGEN_METHODS;
-
   /*! \brief Get return describe for default node*/
   virtual const String IdxNode(bool as_raw = true) { return IdxNode(node_, as_raw); };
 
@@ -87,18 +82,13 @@ class BaseOpCodeGen {
   /*! \brief Get func_name for the default node*/
   const String func_name() { return func_name_; }
 
-  /*! \brief Get the config*/
-  const std::shared_ptr<ConfigType> config() { return config_; }
-
   /*! \brief Get the default node*/
   const MSCJoint node() { return node_; }
 
-  /*! \brief The stack of codes*/
-  CodeStack stack_;
+  CODEGEN_MEMBERS;
 
  private:
   String func_name_;
-  std::shared_ptr<ConfigType> config_;
   MSCJoint node_;
 };
 
@@ -128,13 +118,10 @@ class BaseGraphCodeGen {
 
   virtual ~BaseGraphCodeGen() = default;
 
-  /*! \brief Stack the docs for the script*/
-  virtual void CodeGen() = 0;
-
   /*! \brief Get sources*/
-  virtual const Map<String, String> GetSources(const std::string& print_options = "") const = 0;
+  virtual const Map<String, String> GetSources(const std::string& print_options = "") = 0;
 
-  CODEGEN_METHODS;
+  CODEGEN_MEMBERS;
 
  protected:
   /*!
@@ -171,17 +158,11 @@ class BaseGraphCodeGen {
     }
   }
 
-  /*! \brief Get the docs from last block*/
-  const Array<Doc> GetDocs() const { return stack_.GetDocs(); }
-
   /*! \brief Get the docs for the op*/
   virtual const Array<Doc> GetOpCodes(const MSCJoint& node) = 0;
 
   /*! \brief Get the graph*/
   const MSCGraph graph() const { return graph_; }
-
-  /*! \brief Get the config*/
-  const std::shared_ptr<ConfigType> config() { return config_; }
 
   /*! \brief Get the scopes*/
   const std::stack<Array<String>> scopes() const { return scopes_; }
@@ -192,9 +173,6 @@ class BaseGraphCodeGen {
  private:
   /*! \brief The graph*/
   MSCGraph graph_;
-
-  /*! \brief The config*/
-  std::shared_ptr<ConfigType> config_;
 
   /*! \brief The scopes for graph*/
   std::stack<Array<String>> scopes_;

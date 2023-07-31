@@ -89,7 +89,7 @@ void MSCBasePrinter::PrintTypedDoc(const LiteralDoc& doc) {
   } else if (const auto* int_imm = value.as<IntImmNode>()) {
     output_ << int_imm->value;
   } else if (const auto* float_imm = value.as<FloatImmNode>()) {
-    output_.precision(17);
+    output_.precision(config_.float_precision);
     if (std::isinf(float_imm->value) || std::isnan(float_imm->value)) {
       output_ << '"' << float_imm->value << '"';
     } else {

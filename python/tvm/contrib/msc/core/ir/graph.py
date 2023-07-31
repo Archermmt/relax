@@ -65,6 +65,10 @@ class MSCTensor(Object):
     def dtype_name(self):
         return _ffi_api.MSCTensorDtypeName(self)
 
+    @property
+    def ndim(self):
+        return len(self.shape)
+
 
 class BaseJoint(Object):
     """Base class of all MSC Nodes."""

@@ -30,11 +30,11 @@ from .register import get_registered_func
 class MSCDirectory(object):
     """Create a directory manager for MSC"""
 
-    def __init__(self, path: str = None, cleanup: bool = False):
+    def __init__(self, path: str = None, keep_history: bool = True, cleanup: bool = False):
         self._path = os.path.abspath(path or tempfile.mkdtemp())
         self._cleanup = cleanup
         self._cwd = os.getcwd()
-        if os.path.isdir(self._path) and self._cleanup:
+        if os.path.isdir(self._path) and not keep_history:
             shutil.rmtree(self._path)
         if not os.path.isdir(self._path):
             os.mkdir(self._path)
@@ -110,13 +110,15 @@ class MSCDirectory(object):
         return self._path
 
 
-def msc_dir(path: str = None, cleanup: bool = False) -> MSCDirectory:
+def msc_dir(path: str = None, keep_history: bool = True, cleanup: bool = False) -> MSCDirectory:
     """Create MSCDirectory
 
     Parameters
     ----------
     path: str
         The path of the dir.
+    keep_history: bool
+        Whether to remove files before start.
     cleanup: bool
         Whether to clean up before exit.
 
@@ -126,7 +128,7 @@ def msc_dir(path: str = None, cleanup: bool = False) -> MSCDirectory:
         The created dir.
     """
 
-    return MSCDirectory(path, cleanup)
+    return MSCDirectory(path, keep_history, cleanup)
 
 
 def load_callable(name: str, framework: str = MSC_FRAMEWORK.MSC) -> callable:

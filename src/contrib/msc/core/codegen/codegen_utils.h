@@ -77,7 +77,12 @@ using namespace tvm::script::printer;
     LOG(FATAL) << "Do not support key " << key; \
   }
 
-#define CODEGEN_METHODS                                                                            \
+#define CODEGEN_MEMBERS                                                                            \
+ public:                                                                                           \
+  virtual const Array<Doc> GetDocs() = 0;                                                          \
+                                                                                                   \
+ protected:                                                                                        \
+  const std::shared_ptr<ConfigType> config() { return config_; }                                   \
   const String GetSuffix(bool as_raw = false) {                                                    \
     const String& suffix = as_raw && config()->need_process ? "_raw" : "";                         \
     return suffix;                                                                                 \
@@ -97,7 +102,10 @@ using namespace tvm::script::printer;
   virtual const String DType(const DataType& dtype) { return runtime::DLDataType2String(dtype); }  \
   virtual const String Comment(const MSCJoint& node) {                                             \
     return CodeGenUtils::CommentNode(node, config()->prefix);                                      \
-  }
+  }                                                                                                \
+                                                                                                   \
+ private:                                                                                          \
+  std::shared_ptr<ConfigType> config_;
 
 /*!
  * \brief Utils for CodeGen.

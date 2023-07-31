@@ -14,8 +14,4 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.transform"""
-
-
-from .pattern import *
-from .transform import *
+"""tvm.contrib.msc.framework.tvm"""

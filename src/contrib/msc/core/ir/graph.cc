@@ -118,8 +118,20 @@ size_t BaseJointNode::AddChild(const BaseJoint& child) const {
   return children.size() - 1;
 }
 
+const BaseJoint BaseJointNode::ParentAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, parents.size());
+  return Downcast<BaseJoint>(parents[v_index]);
+}
+
+const BaseJoint BaseJointNode::ChildAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, children.size());
+  return Downcast<BaseJoint>(children[v_index]);
+}
+
+bool BaseJointNode::HasAttr(const String& key) const { return attrs.count(key); }
+
 bool BaseJointNode::GetAttr(const String& key, std::string* val) const {
-  if (attrs.count(key)) {
+  if (attrs.count(key) && attrs[key].size() > 0) {
     *val = attrs[key];
     return true;
   }
@@ -169,6 +181,7 @@ bool BaseJointNode::GetAttr(const String& key, bool* val) const {
   int val_int;
   if (GetAttr(key, &val_int)) {
     *val = (val_int != 0);
+    return true;
   }
   return false;
 }
@@ -268,6 +281,12 @@ MSCJoint::MSCJoint(const std::string& json_str, const Map<String, BaseJoint>& no
   data_ = std::move(n);
 }
 
+const MSCJoint MSCJoint::Clone(const MSCJoint& node,
+                               const std::vector<std::pair<BaseJoint, size_t>>& inputs) {
+  return MSCJoint(node->index, node->name, node->master, node->optype, node->attrs, node->scope,
+                  inputs, node->outputs, node->weights);
+}
+
 const JsonMSCJoint MSCJointNode::ToJson() const {
   JsonMSCJoint j_joint;
   j_joint.index = index;
@@ -315,7 +334,7 @@ void MSCJointNode::FromJson(const JsonMSCJoint& j_joint, const Map<String, BaseJ
     std::tie(producer, index_str) = StringUtils::SplitOnce(in_name, ":");
     int p_idx = -1;
     for (size_t i = 0; i < parents.size(); i++) {
-      if (Downcast<BaseJoint>(parents[i])->name == producer) {
+      if (ParentAt(i)->name == producer) {
         p_idx = i;
         break;
       }
@@ -344,7 +363,7 @@ const MSCTensor MSCJointNode::InputAt(int index) const {
   size_t v_index = CommonUtils::GetIndex(index, inputs.size());
   const auto& p_idx = inputs[v_index][0];
   const auto& out_idx = inputs[v_index][1];
-  return Downcast<MSCJoint>(parents[p_idx->value])->OutputAt(out_idx->value);
+  return ParentAt(p_idx->value)->OutputAt(out_idx->value);
 }
 
 const Array<MSCTensor> MSCJointNode::GetInputs() const {
@@ -373,6 +392,16 @@ const MSCTensor MSCJointNode::WeightAt(const String& wtype) const {
   return weights[wtype];
 }
 
+const MSCJoint MSCJointNode::ParentAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, parents.size());
+  return Downcast<MSCJoint>(parents[v_index]);
+}
+
+const MSCJoint MSCJointNode::ChildAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, children.size());
+  return Downcast<MSCJoint>(children[v_index]);
+}
+
 const MSCJoint MSCJointNode::ProducerOf(int index) const {
   const auto& pair = ProducerAndIdxOf(index);
   return pair.first;
@@ -390,7 +419,7 @@ const MSCJoint MSCJointNode::ProducerOf(const MSCTensor& input) const {
 const std::pair<MSCJoint, size_t> MSCJointNode::ProducerAndIdxOf(int index) const {
   size_t v_index = CommonUtils::GetIndex(index, inputs.size());
   const auto& p_idx = inputs[v_index][0];
-  return std::make_pair(Downcast<MSCJoint>(parents[p_idx->value]), inputs[v_index][1]->value);
+  return std::make_pair(ParentAt(p_idx->value), inputs[v_index][1]->value);
 }
 
 const std::pair<MSCJoint, size_t> MSCJointNode::ProducerAndIdxOf(const String& name) const {
@@ -423,6 +452,16 @@ WeightJoint::WeightJoint(int index, const String& name, const String& master, co
   }
   n->friends = std::move(friends);
   data_ = std::move(n);
+}
+
+const WeightJoint WeightJointNode::ParentAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, parents.size());
+  return Downcast<WeightJoint>(parents[v_index]);
+}
+
+const WeightJoint WeightJointNode::ChildAt(int index) const {
+  size_t v_index = CommonUtils::GetIndex(index, children.size());
+  return Downcast<WeightJoint>(children[v_index]);
 }
 
 MSCGraph::MSCGraph(const String& name, const Array<MSCJoint>& nodes,
@@ -479,8 +518,8 @@ void MSCGraphNode::FromJson(const JsonMSCGraph& j_graph) {
   for (const auto& n : j_graph.nodes) {
     const auto& node = MSCJoint(n, loaded_nodes);
     loaded_nodes.Set(node->name, node);
-    for (size_t i = 0; i < node->parents.size(); i++) {
-      Downcast<BaseJoint>(node->parents[i])->AddChild(node);
+    for (const auto& p : node->parents) {
+      Downcast<BaseJoint>(p)->AddChild(node);
     }
     node_names.push_back(node->name);
     nodes.Set(node->name, node);
@@ -559,6 +598,28 @@ const Array<MSCTensor> MSCGraphNode::GetOutputs() const {
   return t_outputs;
 }
 
+const Array<MSCJoint> MSCGraphNode::GetEntries() const {
+  Array<MSCJoint> entries;
+  for (size_t i = 0; i < input_names.size(); i++) {
+    entries.push_back(FindProducer(input_names[i]));
+  }
+  return entries;
+}
+
+const Array<MSCJoint> MSCGraphNode::GetExits() const {
+  Array<MSCJoint> exits;
+  std::set<String> setted_exits;
+  for (size_t i = 0; i < output_names.size(); i++) {
+    const auto& exit = FindProducer(output_names[i]);
+    if (setted_exits.count(exit->name)) {
+      continue;
+    }
+    exits.push_back(exit);
+    setted_exits.insert(exit->name);
+  }
+  return exits;
+}
+
 const MSCTensor MSCGraphNode::FindTensor(const String& name) const {
   if (weight_holders.count(name)) {
     const auto& node = FindNode(weight_holders[name][0]);
@@ -587,6 +648,11 @@ const std::pair<MSCJoint, size_t> MSCGraphNode::FindProducerAndIdx(const String&
   const String& tensor_name = tensor_alias.count(name) ? tensor_alias[name] : name;
   String host, index;
   std::tie(host, index) = StringUtils::SplitOnce(tensor_name, ":");
+  if (index.size() == 0) {
+    const auto& node = FindNode(host);
+    ICHECK(node->optype == "constant") << "Tensor without index should be constant, get " << node;
+    return std::make_pair(node, 0);
+  }
   return std::make_pair(FindNode(host), std::stoi(index));
 }
 
@@ -737,25 +803,23 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
       p->stream << ">";
     });
 
-#define MSC_NODE_BASE_HEAD(Stream, Joint)                     \
-  Stream << "ID_" << Joint->index << " " << Joint->name;      \
-  if (Joint->master.size() > 0) {                             \
-    Stream << "(M: " << Joint->master << ")";                 \
-  }                                                           \
-  Stream << " <PARENTS: ";                                    \
-  if (Joint->parents.size() > 0) {                            \
-    for (size_t i = 0; i < Joint->parents.size(); i++) {      \
-      Stream << Downcast<BaseJoint>(Joint->parents[i])->name  \
-             << (i == Joint->parents.size() - 1 ? "" : ",");  \
-    }                                                         \
-  }                                                           \
-  Stream << "| CHILDERN: ";                                   \
-  if (Joint->children.size() > 0) {                           \
-    for (size_t i = 0; i < Joint->children.size(); i++) {     \
-      Stream << Downcast<BaseJoint>(Joint->children[i])->name \
-             << (i == Joint->children.size() - 1 ? "" : ","); \
-    }                                                         \
-  }                                                           \
+#define MSC_NODE_BASE_HEAD(Stream, Joint)                                                \
+  Stream << "ID_" << Joint->index << " " << Joint->name;                                 \
+  if (Joint->master.size() > 0) {                                                        \
+    Stream << "(M: " << Joint->master << ")";                                            \
+  }                                                                                      \
+  Stream << " <PARENTS: ";                                                               \
+  if (Joint->parents.size() > 0) {                                                       \
+    for (size_t i = 0; i < Joint->parents.size(); i++) {                                 \
+      Stream << Joint->ParentAt(i)->name << (i == Joint->parents.size() - 1 ? "" : ","); \
+    }                                                                                    \
+  }                                                                                      \
+  Stream << "| CHILDERN: ";                                                              \
+  if (Joint->children.size() > 0) {                                                      \
+    for (size_t i = 0; i < Joint->children.size(); i++) {                                \
+      Stream << Joint->ChildAt(i)->name << (i == Joint->children.size() - 1 ? "" : ","); \
+    }                                                                                    \
+  }                                                                                      \
   Stream << ">\n";
 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
@@ -840,7 +904,7 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
       }
       p->stream << "OUTPUTS: ";
       for (size_t i = 0; i < graph->output_names.size(); i++) {
-        p->stream << graph->output_names[i] << (i == graph->output_names.size() - 1 ? "\n" : ",");
+        p->stream << graph->output_names[i] << (i == graph->output_names.size() - 1 ? ">\n" : ",");
       }
       for (const auto& n : graph->node_names) {
         p->stream << graph->FindNode(n) << "\n";

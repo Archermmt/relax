@@ -27,6 +27,23 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
+void PythonPrinter::PrintTypedDoc(const LiteralDoc& doc) {
+  const ObjectRef& value = doc->value;
+  bool defined = false;
+  if (!value.defined()) {
+    output_ << "None";
+    defined = true;
+  } else if (const auto* int_imm = value.as<IntImmNode>()) {
+    if (int_imm->dtype.is_bool()) {
+      output_ << (int_imm->value ? "True" : "False");
+      defined = true;
+    }
+  }
+  if (!defined) {
+    MSCBasePrinter::PrintTypedDoc(doc);
+  }
+}
+
 void PythonPrinter::PrintTypedDoc(const AttrAccessDoc& doc) {
   PrintDoc(doc->value, false);
   output_ << "." << doc->name;

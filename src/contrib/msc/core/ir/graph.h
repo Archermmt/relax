@@ -295,6 +295,12 @@ class BaseJointNode : public Object {
   mutable Array<ObjectRef> children;
   /*! \brief Add child to the node. */
   size_t AddChild(const BaseJoint& child) const;
+  /*! \brief Get parent from the node. */
+  const BaseJoint ParentAt(int index) const;
+  /*! \brief Get child from the node. */
+  const BaseJoint ChildAt(int index) const;
+  /*! \brief Check if has the attribute. */
+  bool HasAttr(const String& key) const;
   /*! \brief Get the attribute by type. */
   bool GetAttr(const String& key, std::string* val) const;
   bool GetAttr(const String& key, int* val) const;
@@ -377,6 +383,10 @@ class MSCJointNode : public BaseJointNode {
   const Array<MSCTensor> GetOutputs() const;
   /*! \brief Get weight from the node. */
   const MSCTensor WeightAt(const String& wtype) const;
+  /*! \brief Get parent from the node. */
+  const MSCJoint ParentAt(int index) const;
+  /*! \brief Get child from the node. */
+  const MSCJoint ChildAt(int index) const;
   /*! \brief Get Producer of the input. */
   const MSCJoint ProducerOf(int index) const;
   const MSCJoint ProducerOf(const String& input_name) const;
@@ -446,6 +456,10 @@ class MSCJoint : public BaseJoint {
    */
   TVM_DLL MSCJoint(const std::string& json_str, const Map<String, BaseJoint>& nodes);
 
+  /*! \brief Clone the node. */
+  TVM_DLL static const MSCJoint Clone(const MSCJoint& node,
+                                      const std::vector<std::pair<BaseJoint, size_t>>& inputs);
+
   TVM_DEFINE_OBJECT_REF_METHODS(MSCJoint, BaseJoint, MSCJointNode);
 };
 
@@ -461,6 +475,10 @@ class WeightJointNode : public BaseJointNode {
   MSCTensor weight;
   /*! \brief The friends of weight node. */
   Array<BaseJoint> friends;
+  /*! \brief Get parent from the node. */
+  const WeightJoint ParentAt(int index) const;
+  /*! \brief Get child from the node. */
+  const WeightJoint ChildAt(int index) const;
 
   void VisitAttrs(AttrVisitor* v) {
     BaseJointNode::VisitAttrs(v);
@@ -588,6 +606,10 @@ class MSCGraphNode : public BaseGraphNode {
   const MSCTensor OutputAt(int index) const;
   /*! \brief Get outputs from the graph. */
   const Array<MSCTensor> GetOutputs() const;
+  /*! \brief Get entries from the graph. */
+  const Array<MSCJoint> GetEntries() const;
+  /*! \brief Get exits from the graph. */
+  const Array<MSCJoint> GetExits() const;
   /*! \brief Find tensor from the graph. */
   const MSCTensor FindTensor(const String& name) const;
   /*! \brief Find producer of tensor from the graph. */

@@ -42,6 +42,7 @@ using namespace tvm::script::printer;
 
 struct MSCPrinterConfig {
   size_t indent{0};
+  size_t float_precision{6};
   std::string indent_space{"  "};
   std::string separator{", "};
   void Load(dmlc::JSONReader* reader) {
@@ -50,6 +51,8 @@ struct MSCPrinterConfig {
     while (reader->NextObjectItem(&key)) {
       if (key == "indent") {
         reader->Read(&indent);
+      } else if (key == "float_precision") {
+        reader->Read(&float_precision);
       } else if (key == "indent_space") {
         reader->Read(&indent_space);
       } else if (key == "separator") {

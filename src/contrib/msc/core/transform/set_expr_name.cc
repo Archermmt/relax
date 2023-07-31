@@ -39,6 +39,8 @@ namespace relax {
 // Relax name setter
 class RelaxExprNameSetter : public ExprVisitor {
  public:
+  explicit RelaxExprNameSetter(const IRModule& ref_module) : ref_module_(ref_module) {}
+
   void VisitBindingBlock(const BindingBlock& block) final {
     String block_name = SpanUtils::GetAttr(block->span, "name");
     if (block_name.size() == 0) {
@@ -59,64 +61,95 @@ class RelaxExprNameSetter : public ExprVisitor {
     block_stack_.pop_back();
   }
 
-  void VisitExpr_(const ConstantNode* op) final {
-    ExprVisitor::VisitExpr_(op);
-    const String& unique_name = GetUniqueName(GetRef<Constant>(op), "const");
-    if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
-      op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+  void VisitExpr_(const ConstantNode* val) {
+    ExprVisitor::VisitExpr_(val);
+    const String& unique_name = GetUniqueName(GetRef<Constant>(val), "const");
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
     }
+    expr_names_.Set(GetRef<Constant>(val), unique_name);
   }
 
-  void VisitExpr_(const ShapeExprNode* op) final {
-    ExprVisitor::VisitExpr_(op);
-    const String& unique_name = GetUniqueName(GetRef<ShapeExpr>(op), "shape");
-    if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
-      op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+  void VisitBinding_(const VarBindingNode* binding, const ConstantNode* val) {
+    ExprVisitor::VisitBinding_(binding, val);
+    const String& unique_name = GetUniqueName(GetRef<Constant>(val), "const");
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
     }
+    expr_names_.Set(binding->var, unique_name);
   }
 
-  void VisitExpr_(const TupleNode* op) final {
-    ExprVisitor::VisitExpr_(op);
-    const String& unique_name = GetUniqueName(GetRef<Tuple>(op), "tuple");
-    if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
-      op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+  void VisitBinding_(const VarBindingNode* binding, const ShapeExprNode* val) {
+    ExprVisitor::VisitBinding_(binding, val);
+    const String& unique_name = GetUniqueName(GetRef<ShapeExpr>(val), "shape");
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
     }
+    expr_names_.Set(binding->var, unique_name);
   }
 
-  void VisitExpr_(const TupleGetItemNode* op) final {
-    ExprVisitor::VisitExpr_(op);
-    const String& tuple_name = SpanUtils::GetAttr(op->tuple->span, "name");
-    const String& unique_name = tuple_name + "." + std::to_string(op->index);
-    if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
-      op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+  void VisitBinding_(const VarBindingNode* binding, const TupleNode* val) {
+    ExprVisitor::VisitBinding_(binding, val);
+    const String& unique_name = GetUniqueName(GetRef<Tuple>(val), "tuple");
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
     }
+    expr_names_.Set(binding->var, unique_name);
   }
 
-  void VisitExpr_(const CallNode* op) final {
-    ExprVisitor::VisitExpr_(op);
-    if (const auto& op_node = op->op.as<OpNode>()) {
+  void VisitBinding_(const VarBindingNode* binding, const TupleGetItemNode* val) {
+    ExprVisitor::VisitBinding_(binding, val);
+    ICHECK(expr_names_.count(val->tuple)) << "Can not find tuple of " << GetRef<TupleGetItem>(val);
+    const String& unique_name = expr_names_[val->tuple] + "." + std::to_string(val->index);
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
+    }
+    expr_names_.Set(binding->var, unique_name);
+  }
+
+  void VisitBinding_(const VarBindingNode* binding, const CallNode* val) {
+    ExprVisitor::VisitBinding_(binding, val);
+    String name_hint, optype;
+    if (const auto* op_node = val->op.as<OpNode>()) {
       const std::string& op_name = op_node->name;
       int rpos = op_name.rfind(".");
-      const String& unique_name = GetUniqueName(GetRef<Call>(op), op_name.substr(rpos + 1));
-      if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
-        op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+      name_hint = op_name.substr(rpos + 1);
+      optype = StringUtils::Replace(op_node->name, "relax.", "");
+    } else if (const auto* v_node = val->op.as<GlobalVarNode>()) {
+      const auto& func = Downcast<Function>(ref_module_->Lookup(v_node->name_hint));
+      ExprVisitor::VisitExpr(func);
+      const auto& name_opt = func->GetAttr<runtime::String>(attr::kComposite);
+      ICHECK(name_opt.defined()) << "Unexpected global func without composite";
+      name_hint = name_opt.value();
+      optype = name_hint;
+    }
+    // set name
+    const String& unique_name = GetUniqueName(GetRef<Expr>(val), name_hint);
+    if (unique_name != SpanUtils::GetAttr(val->span, "name")) {
+      val->span = SpanUtils::SetAttr(val->span, "name", unique_name);
+    }
+    // set constant consumer && master
+    Array<String> input_types;
+    try {
+      input_types = ExprUtils::GetInputTypes(optype, val->args.size());
+    } catch (runtime::InternalError& err) {
+      LOG(WARNING) << "Failed to GetInputTypes for " << GetRef<Call>(val) << " : " << err.message();
+      throw err;
+    }
+    for (size_t i = 0; i < input_types.size(); i++) {
+      if (input_types[i] == "input") {
+        continue;
       }
-      // set constant consumer && master
-      const auto& input_types = ExprUtils::GetInputTypes(GetRef<Call>(op));
-      for (size_t i = 0; i < input_types.size(); i++) {
-        if (input_types[i] == "input") {
-          continue;
-        }
-        if (const auto* c_node = op->args[i].as<ConstantNode>()) {
-          const String& const_name = SpanUtils::GetAttr(c_node->span, "name");
-          if (constant_consumers_.count(const_name)) {
-            op->span = SpanUtils::SetAttr(op->span, "master", constant_consumers_[const_name]);
-          } else {
-            constant_consumers_.Set(const_name, unique_name);
-          }
+      if (const auto* c_node = val->args[i].as<ConstantNode>()) {
+        const String& const_name = SpanUtils::GetAttr(c_node->span, "name");
+        if (constant_consumers_.count(const_name)) {
+          val->span = SpanUtils::SetAttr(val->span, "master", constant_consumers_[const_name]);
+        } else {
+          constant_consumers_.Set(const_name, unique_name);
         }
       }
     }
+    expr_names_.Set(binding->var, unique_name);
   }
 
  private:
@@ -148,21 +181,23 @@ class RelaxExprNameSetter : public ExprVisitor {
   Map<String, String> constant_consumers_;
   std::set<String> setted_blocks_;
   Array<String> block_stack_;
+  Map<Expr, String> expr_names_;
+  IRModule ref_module_;
 };  // class ExprNameSetter
 
-Expr SetRelaxExprName(const Expr& e) {
-  RelaxExprNameSetter().VisitExpr(e);
-  return e;
+void SetRelaxExprName(const IRModule& ref_module, const Expr& e) {
+  RelaxExprNameSetter(ref_module).VisitExpr(e);
 }
 
 namespace transform {
 
-Pass SetRelaxExprName() {
-  runtime::TypedPackedFunc<Function(Function, IRModule, PassContext)> pass_func =
-      [=](Function f, IRModule m, PassContext pc) {
-        return Downcast<Function>(SetRelaxExprName(f));
-      };
-  return CreateFunctionPass(pass_func, 1, "SetRelaxExprName", {});
+Pass SetRelaxExprName(const String& entry_name) {
+  runtime::TypedPackedFunc<IRModule(IRModule, PassContext)> pass_func = [=](IRModule m,
+                                                                            PassContext pc) {
+    relax::SetRelaxExprName(m, m->Lookup(entry_name));
+    return m;
+  };
+  return CreateModulePass(pass_func, 0, "SetRelaxExprName", {});
 }
 
 TVM_REGISTER_GLOBAL("relax.transform.SetRelaxExprName").set_body_typed(SetRelaxExprName);
@@ -175,6 +210,8 @@ namespace relay {
 
 class RelayExprNameSetter : public ExprVisitor {
  public:
+  explicit RelayExprNameSetter(const IRModule& ref_module) : ref_module_(ref_module) {}
+
   void VisitExpr_(const ConstantNode* op) final {
     ExprVisitor::VisitExpr_(op);
     const String& unique_name = GetUniqueName(GetRef<Constant>(op), "const");
@@ -202,14 +239,33 @@ class RelayExprNameSetter : public ExprVisitor {
 
   void VisitExpr_(const CallNode* op) final {
     ExprVisitor::VisitExpr_(op);
-    const std::string& op_name = Downcast<Op>(op->op)->name;
-    int rpos = op_name.rfind(".");
-    const String& unique_name = GetUniqueName(GetRef<Call>(op), op_name.substr(rpos + 1));
+    String name_hint, optype;
+    if (const auto* op_node = op->op.as<OpNode>()) {
+      const std::string& op_name = op_node->name;
+      int rpos = op_name.rfind(".");
+      name_hint = op_name.substr(rpos + 1);
+      optype = StringUtils::Replace(op_node->name, "relay.", "");
+    } else if (const auto* v_node = op->op.as<GlobalVarNode>()) {
+      const auto& func = Downcast<Function>(ref_module_->Lookup(v_node->name_hint));
+      ExprVisitor::VisitExpr(func);
+      const auto& name_opt = func->GetAttr<runtime::String>(attr::kComposite);
+      ICHECK(name_opt.defined()) << "Unexpected global func without composite";
+      optype = name_opt.value();
+      name_hint = optype;
+    }
+    // set name
+    const String& unique_name = GetUniqueName(GetRef<Expr>(op), name_hint);
     if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
       op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
     }
     // set constant consumer && master
-    const auto& input_types = ExprUtils::GetInputTypes(GetRef<Call>(op));
+    Array<String> input_types;
+    try {
+      input_types = ExprUtils::GetInputTypes(optype, op->args.size());
+    } catch (runtime::InternalError& err) {
+      LOG(WARNING) << "Failed to GetInputTypes for " << GetRef<Call>(op) << " : " << err.message();
+      throw err;
+    }
     for (size_t i = 0; i < input_types.size(); i++) {
       if (input_types[i] == "input") {
         continue;
@@ -252,21 +308,22 @@ class RelayExprNameSetter : public ExprVisitor {
 
   Map<String, Expr> setted_names_;
   Map<String, String> constant_consumers_;
+  IRModule ref_module_;
 };  // class ExprNameSetter
 
-Expr SetRelayExprName(const Expr& e) {
-  RelayExprNameSetter().VisitExpr(e);
-  return e;
+void SetRelayExprName(const IRModule& ref_module, const Expr& e) {
+  RelayExprNameSetter(ref_module).VisitExpr(e);
 }
 
 namespace transform {
 
-Pass SetRelayExprName() {
-  runtime::TypedPackedFunc<Function(Function, IRModule, PassContext)> pass_func =
-      [=](Function f, IRModule m, PassContext pc) {
-        return Downcast<Function>(SetRelayExprName(f));
-      };
-  return CreateFunctionPass(pass_func, 1, "SetRelayExprName", {});
+Pass SetRelayExprName(const String& entry_name) {
+  runtime::TypedPackedFunc<IRModule(IRModule, PassContext)> pass_func = [=](IRModule m,
+                                                                            PassContext pc) {
+    relay::SetRelayExprName(m, m->Lookup(entry_name));
+    return m;
+  };
+  return CreateModulePass(pass_func, 0, "SetRelayExprName", {});
 }
 
 TVM_REGISTER_GLOBAL("relay._transform.SetRelayExprName").set_body_typed(SetRelayExprName);

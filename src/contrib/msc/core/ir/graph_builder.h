@@ -91,46 +91,26 @@ class AttrGetter : public AttrVisitor {
    * \param keys the keys.
    * \param values the values.
    */
-  explicit AttrGetter(Array<String>* keys, Array<String>* values) : keys_(keys), values_(values) {}
+  explicit AttrGetter(Map<String, String>* attrs) : attrs_(attrs) {}
 
-  void Visit(const char* key, double* value) final {
-    keys_->push_back(key);
-    values_->push_back(std::to_string(*value));
-  }
+  void Visit(const char* key, double* value) final { attrs_->Set(key, std::to_string(*value)); }
 
-  void Visit(const char* key, int64_t* value) final {
-    keys_->push_back(key);
-    values_->push_back(std::to_string(*value));
-  }
+  void Visit(const char* key, int64_t* value) final { attrs_->Set(key, std::to_string(*value)); }
 
-  void Visit(const char* key, uint64_t* value) final {
-    keys_->push_back(key);
-    values_->push_back(std::to_string(*value));
-  }
+  void Visit(const char* key, uint64_t* value) final { attrs_->Set(key, std::to_string(*value)); }
 
-  void Visit(const char* key, int* value) final {
-    keys_->push_back(key);
-    values_->push_back(std::to_string(*value));
-  }
+  void Visit(const char* key, int* value) final { attrs_->Set(key, std::to_string(*value)); }
 
-  void Visit(const char* key, bool* value) final {
-    keys_->push_back(key);
-    values_->push_back(std::to_string(*value));
-  }
+  void Visit(const char* key, bool* value) final { attrs_->Set(key, std::to_string(*value)); }
 
-  void Visit(const char* key, std::string* value) final {
-    keys_->push_back(key);
-    values_->push_back(*value);
-  }
+  void Visit(const char* key, std::string* value) final { attrs_->Set(key, *value); }
 
   void Visit(const char* key, DataType* value) final {
-    keys_->push_back(key);
-    values_->push_back(runtime::DLDataType2String(*value));
+    attrs_->Set(key, runtime::DLDataType2String(*value));
   }
 
   void Visit(const char* key, runtime::ObjectRef* value) final {
-    keys_->push_back(key);
-    values_->push_back(StringUtils::ToString(*value));
+    attrs_->Set(key, StringUtils::ToString(*value));
   }
 
   void Visit(const char* key, void** value) final {
@@ -142,20 +122,34 @@ class AttrGetter : public AttrVisitor {
   }
 
  private:
-  Array<String>* keys_;
-  Array<String>* values_;
+  Map<String, String>* attrs_;
+};
+
+class RelaxFuncAttrGetter : public RelaxExprVisitor {
+ public:
+  Map<String, String> GetAttrs(const Expr& expr) {
+    RelaxExprVisitor::VisitExpr(expr);
+    return attrs_;
+  }
+
+  void VisitExpr_(const relax::CallNode* op) final;
+
+ private:
+  Map<String, String> attrs_;
 };
 
 class RelaxGraphBuilder : public RelaxExprVisitor {
  public:
   /*!
    * \brief The constructor of RelaxGraphBuilder
-   * \param options the options for the builder.
-   * \param indent the start indent.
+   * \param name the name of the graph.
+   * \param options the options of build the graph.
    */
-  explicit RelaxGraphBuilder(const String& name, const std::string& options = "")
+  explicit RelaxGraphBuilder(const IRModule& ref_module, const String& name,
+                             const std::string& options = "")
       : RelaxExprVisitor() {
     name_ = name;
+    ref_module_ = ref_module;
     if (options.size() > 0) {
       std::istringstream is(options);
       dmlc::JSONReader reader(&is);
@@ -163,14 +157,18 @@ class RelaxGraphBuilder : public RelaxExprVisitor {
     }
   }
 
-  MSCGraph Build(const relax::Function& func);
+  const MSCGraph Build(const relax::Function& func);
 
-  MSCJoint AddNode(const Expr& expr, const Optional<Expr>& binding_var = NullOpt,
-                   const String& name = "");
+  const MSCJoint AddNode(const Expr& expr, const Optional<Expr>& binding_var = NullOpt,
+                         const String& name = "");
 
   void VisitBindingBlock(const relax::BindingBlock& block) final;
 
   void VisitExpr_(const relax::ConstantNode* op) final;
+
+  void VisitBinding_(const relax::VarBindingNode* binding, const relax::ConstantNode* val) final;
+
+  void VisitBinding_(const relax::VarBindingNode* binding, const relax::ShapeExprNode* val) final;
 
   void VisitBinding_(const relax::VarBindingNode* binding, const relax::CallNode* call_node) final;
 
@@ -179,11 +177,14 @@ class RelaxGraphBuilder : public RelaxExprVisitor {
   void VisitBinding_(const relax::VarBindingNode* binding,
                      const relax::TupleGetItemNode* val) final;
 
+  void VisitBinding_(const relax::VarBindingNode* binding, const relax::VarNode* val) final;
+
   void VisitBinding_(const relax::VarBindingNode* binding, const relax::DataflowVarNode* val) final;
 
  private:
   String name_;
   String scope_name_;
+  IRModule ref_module_;
   MSCRBuildConfig config_;
   Array<MSCJoint> nodes_;
   Map<String, MSCTensor> weights_;
@@ -196,12 +197,80 @@ class RelaxWeightsExtractor : public RelaxExprVisitor {
   /*!
    * \brief Visit the constant and save weights
    */
-  Map<String, NDArray> GetWeights(const relax::Function& func);
+  Map<MSCTensor, NDArray> GetWeights(const relax::Function& func);
 
   void VisitExpr_(const relax::ConstantNode* op) final;
 
  private:
-  Map<String, NDArray> weights_;
+  Map<MSCTensor, NDArray> weights_;
+};
+
+
+class RelayFuncAttrGetter : public RelayExprVisitor {
+ public:
+  Map<String, String> GetAttrs(const Expr& expr) {
+    RelayFuncAttrGetter::VisitExpr(expr);
+    return attrs_;
+  }
+
+  void VisitExpr_(const relay::CallNode* op) final;
+
+ private:
+  Map<String, String> attrs_;
+};
+
+class RelayGraphBuilder : public RelayExprVisitor {
+ public:
+  /*!
+   * \brief The constructor of RelayGraphBuilder
+   * \param name the name of the graph.
+   * \param options the options of build the graph.
+   */
+  explicit RelayGraphBuilder(const IRModule& ref_module, const String& name,
+                             const std::string& options = "")
+      : RelayExprVisitor() {
+    name_ = name;
+    ref_module_ = ref_module;
+    if (options.size() > 0) {
+      std::istringstream is(options);
+      dmlc::JSONReader reader(&is);
+      reader.Read(&config_);
+    }
+  }
+
+  MSCGraph Build(const relay::Function& func);
+
+  MSCJoint AddNode(const Expr& expr, const String& name = "");
+
+  void VisitExpr_(const relay::ConstantNode* op) final;
+
+  void VisitExpr_(const relay::CallNode* op) final;
+
+  void VisitExpr_(const relay::TupleNode* val) final;
+
+  void VisitExpr_(const relay::TupleGetItemNode* val) final;
+
+ private:
+  String name_;
+  MSCRBuildConfig config_;
+  IRModule ref_module_;
+  Array<MSCJoint> nodes_;
+  Map<String, MSCTensor> weights_;
+  Map<Expr, Array<String>> expr_tensor_map_;
+  std::unordered_map<String, std::pair<BaseJoint, size_t>> tensor_input_map_;
+};
+
+class RelayWeightsExtractor : public RelayExprVisitor {
+ public:
+  /*!
+   * \brief Visit the constant and save weights
+   */
+  Map<MSCTensor, NDArray> GetWeights(const relay::Function& func);
+
+  void VisitExpr_(const relay::ConstantNode* op) final;
+
+ private:
+  Map<MSCTensor, NDArray> weights_;
 };
 
 }  // namespace msc

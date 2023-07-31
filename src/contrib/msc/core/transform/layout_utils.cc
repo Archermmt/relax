@@ -32,25 +32,33 @@ bool LayoutUtils::LayoutInfered(const Expr& expr) {
 }
 
 bool LayoutUtils::SetLayout(const Expr& expr, const NLayout& layout) {
-  if (LayoutInfered(expr)) {
-    return false;
-  }
+  const String& saved_layout = SpanUtils::GetAttr(expr->span, "layout");
   const auto& sinfo = GetStructInfo(expr);
-  if (sinfo.as<TensorStructInfoNode>()) {
+  if (sinfo.as<TensorStructInfoNode>() || sinfo.as<ShapeStructInfoNode>()) {
+    ICHECK(layout.IsLeaf()) << "Expr has tensor struct, but find nested layout " << expr;
     const auto& l_layout = layout.LeafValue()->layout;
     if (!l_layout.defined()) {
       return false;
     }
+    if (saved_layout == l_layout.name()) {
+      return false;
+    }
     expr->span = SpanUtils::SetAttr(expr->span, "layout", l_layout.name());
   } else if (sinfo.as<TupleStructInfoNode>()) {
+    ICHECK(!layout.IsLeaf()) << "Expr has tupple struct, but find non-nested layout " << expr;
     String layout_str;
     Array<NLayout> nested_layouts = layout.NestedArray();
     for (size_t i = 0; i < nested_layouts.size(); i++) {
+      ICHECK(nested_layouts[i].IsLeaf())
+          << "Expr input[" << i << "] has tensor struct, but find nested layout " << expr;
       const auto& l_layout = nested_layouts[i].LeafValue()->layout;
       if (!l_layout.defined()) {
         return false;
       }
       layout_str = layout_str + l_layout.name() + (i < nested_layouts.size() - 1 ? "," : "");
+    }
+    if (saved_layout == layout_str) {
+      return false;
     }
     expr->span = SpanUtils::SetAttr(expr->span, "layout", layout_str);
   }
@@ -124,7 +132,8 @@ const LayoutDecision LayoutUtils::ExpandLayout(const LayoutDecision& src_layout,
       target = "C";
     } else {
       for (const auto& p : priority_dims) {
-        if (!new_layout.find(p)) {
+        int pos = new_layout.find(p);
+        if (pos < 0) {
           target = p;
           break;
         }
@@ -153,6 +162,24 @@ const LayoutDecision LayoutUtils::ReduceLayout(const LayoutDecision& src_layout,
     new_layout += src_layout->layout[i].name();
   }
   return LayoutDecision(new_layout);
+}
+
+const LayoutDecision LayoutUtils::PermuteLayout(const LayoutDecision& src_layout,
+                                                const Array<Integer>& axes) {
+  String layout_str;
+  for (const auto& a : axes) {
+    layout_str = layout_str + src_layout->layout[a->value].name();
+  }
+  return LayoutDecision(layout_str);
+}
+
+const LayoutDecision LayoutUtils::PermuteLayout(const LayoutDecision& src_layout,
+                                                const std::vector<size_t>& axes) {
+  String layout_str;
+  for (const auto& a : axes) {
+    layout_str = layout_str + src_layout->layout[a].name();
+  }
+  return LayoutDecision(layout_str);
 }
 
 }  // namespace msc

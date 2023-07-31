@@ -46,6 +46,20 @@ void BaseStack::Assign(const String& lhs, const String& rhs, const String& annot
   }
 }
 
+void BaseStack::AttrAccess(const String& attr) {
+  const auto& host = PopDoc();
+  if (host.as<AssignDoc>()) {
+    const auto& assign = Downcast<AssignDoc>(host);
+    ICHECK(assign->rhs.defined()) << "AttrAccess with assign missing rhs";
+    const auto& access = AttrAccessDoc(assign->rhs.value(), attr);
+    PushDoc(AssignDoc(assign->lhs, access, assign->annotation));
+  } else if (host.as<ExprDocNode>()) {
+    PushDoc(AttrAccessDoc(Downcast<ExprDoc>(host), attr));
+  } else {
+    LOG(FATAL) << "Unexpected attr access host " << host->GetTypeKey();
+  }
+}
+
 void BaseStack::FuncDef(const String& func_name, const String& ret_type) {
   if (ret_type.size() > 0) {
     PushDoc(FunctionDoc(IdDoc(func_name), Array<AssignDoc>(), Array<ExprDoc>(), IdDoc(ret_type),
