@@ -131,7 +131,7 @@ class RelaxExprNameSetter : public ExprVisitor {
     // set constant consumer && master
     Array<String> input_types;
     try {
-      input_types = ExprUtils::GetInputTypes(optype, val->args.size());
+      input_types = ExprUtils::GetInputTypes(optype, val->args.size(), true);
     } catch (runtime::InternalError& err) {
       LOG(WARNING) << "Failed to GetInputTypes for " << GetRef<Call>(val) << " : " << err.message();
       throw err;
@@ -237,6 +237,16 @@ class RelayExprNameSetter : public ExprVisitor {
     }
   }
 
+  void VisitExpr_(const FunctionNode* op) final {
+    ExprVisitor::VisitExpr_(op);
+    const auto& name_opt = op->GetAttr<runtime::String>(attr::kComposite);
+    const String& name_hint = name_opt.defined() ? name_opt.value() : "func";
+    const String& unique_name = GetUniqueName(GetRef<Function>(op), name_hint);
+    if (unique_name != SpanUtils::GetAttr(op->span, "name")) {
+      op->span = SpanUtils::SetAttr(op->span, "name", unique_name);
+    }
+  }
+
   void VisitExpr_(const CallNode* op) final {
     ExprVisitor::VisitExpr_(op);
     String name_hint, optype;
@@ -261,7 +271,7 @@ class RelayExprNameSetter : public ExprVisitor {
     // set constant consumer && master
     Array<String> input_types;
     try {
-      input_types = ExprUtils::GetInputTypes(optype, op->args.size());
+      input_types = ExprUtils::GetInputTypes(optype, op->args.size(), false);
     } catch (runtime::InternalError& err) {
       LOG(WARNING) << "Failed to GetInputTypes for " << GetRef<Call>(op) << " : " << err.message();
       throw err;

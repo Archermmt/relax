@@ -157,7 +157,7 @@ const MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>
   Array<String> input_names;
   Map<String, MSCTensor> node_weights;
   if (const auto* call_node = expr.as<relax::CallNode>()) {
-    const auto& input_types = ExprUtils::GetInputTypes(optype, call_node->args.size());
+    const auto& input_types = ExprUtils::GetInputTypes(optype, call_node->args.size(), true);
     for (size_t i = 0; i < call_node->args.size(); i++) {
       const auto& arg = call_node->args[i];
       if (const auto* s_node = arg.as<relax::ShapeExprNode>()) {
@@ -174,11 +174,15 @@ const MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>
       if (input_types[i] != "input" && arg.as<relax::ConstantNode>()) {
         const auto& t_name = expr_tensor_map_[arg][0];
         const auto& w_name = SpanUtils::GetAttr(arg->span, "name");
+        const auto& pair = tensor_input_map_[t_name];
+        const auto& producer = Downcast<MSCJoint>(pair.first);
         if (!weights_.count(w_name)) {
-          const auto& pair = tensor_input_map_[t_name];
-          const auto& ref = Downcast<MSCJoint>(pair.first)->OutputAt(pair.second);
+          const auto& ref = producer->OutputAt(pair.second);
           const auto& weight = MSCTensor(w_name, ref->dtype, ref->layout.name(), ref->shape);
           weights_.Set(w_name, weight);
+        }
+        if (producer->HasAttr("scalar")) {
+          attrs.Set(input_types[i], producer->GetTypeAttr<std::string>("scalar"));
         }
         node_weights.Set(input_types[i], weights_[w_name]);
       } else {
@@ -230,11 +234,11 @@ const MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>
     }
     ICHECK_EQ(layouts.size(), tuple_sinfo->fields.size())
         << "Layout " << layout << " msimatch with fileds size " << tuple_sinfo->fields.size();
-    size_t filed_size = tuple_sinfo->fields.size();
+    size_t field_size = tuple_sinfo->fields.size();
     if (optype == "nn.batch_norm") {
-      filed_size = 1;
+      field_size = 1;
     }
-    for (size_t i = 0; i < filed_size; i++) {
+    for (size_t i = 0; i < field_size; i++) {
       const auto& t_info = Downcast<relax::TensorStructInfo>(tuple_sinfo->fields[i]);
       const auto& opt_shape = t_info->GetShape();
       Array<Integer> shape;
@@ -299,29 +303,12 @@ void RelaxGraphBuilder::VisitBinding_(const relax::VarBindingNode* binding,
                                       const relax::TupleNode* val) {
   RelaxExprVisitor::VisitBinding_(binding, val);
   AddNode(GetRef<relax::Tuple>(val), binding->var);
-  /*
-  Array<String> tensors;
-  for (const auto& f : val->fields) {
-    ICHECK(expr_tensor_map_.count(f)) << "Can not find tuple field " << f;
-    for (const auto& n : expr_tensor_map_[f]) {
-      tensors.push_back(n);
-    }
-  }
-  expr_tensor_map_.Set(binding->var, tensors);
-  */
 }
 
 void RelaxGraphBuilder::VisitBinding_(const relax::VarBindingNode* binding,
                                       const relax::TupleGetItemNode* val) {
   RelaxExprVisitor::VisitBinding_(binding, val);
   AddNode(GetRef<relax::TupleGetItem>(val), binding->var);
-  /*
-  ICHECK(expr_tensor_map_.count(val->tuple)) << "Can not find tuple " << val->tuple;
-  const auto& tensor_names = expr_tensor_map_[val->tuple];
-  ICHECK_LT(val->index, tensor_names.size())
-      << "Index " << val->index << " out of range " << tensor_names;
-  expr_tensor_map_.Set(binding->var, Array<String>{tensor_names[val->index]});
-  */
 }
 
 void RelaxGraphBuilder::VisitBinding_(const relax::VarBindingNode* binding,
@@ -364,6 +351,7 @@ void RelaxWeightsExtractor::VisitExpr_(const relax::ConstantNode* op) {
 }
 
 void RelayFuncAttrGetter::VisitExpr_(const relay::CallNode* op) {
+  RelayExprVisitor::VisitExpr_(op);
   if (op->attrs.defined()) {
     Map<String, String> attrs;
     AttrGetter getter(&attrs);
@@ -440,38 +428,32 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
   } else if (const auto* call_node = expr.as<relay::CallNode>()) {
     if (const auto* op_node = call_node->op.as<OpNode>()) {
       optype = StringUtils::Replace(op_node->name, "relay.", "");
-    } else if (const auto* v_node = call_node->op.as<GlobalVarNode>()) {
-      const auto& func = Downcast<relay::Function>(ref_module_->Lookup(v_node->name_hint));
-      const auto& name_opt = func->GetAttr<runtime::String>(relay::attr::kComposite);
-      ICHECK(name_opt.defined()) << "Unexpected global func without composite";
-      optype = name_opt.value();
-    } else if (const auto* f_node = call_node->op.as<relay::FunctionNode>()) {
-      const auto& name_opt = f_node->GetAttr<runtime::String>(relay::attr::kComposite);
-      ICHECK(name_opt.defined()) << "Unexpected func without composite";
-      optype = name_opt.value();
     } else {
       optype = "unknown_op";
     }
+  } else if (const auto* f_node = expr.as<relay::FunctionNode>()) {
+    const auto& name_opt = f_node->GetAttr<runtime::String>(relay::attr::kComposite);
+    ICHECK(name_opt.defined()) << "Unexpected func without composite";
+    optype = name_opt.value();
   } else {
     optype = "unknown_expr";
   }
   // Extract attributes
   Map<String, String> attrs;
   if (const auto* call_node = expr.as<relay::CallNode>()) {
-    if (const auto* v_node = call_node->op.as<GlobalVarNode>()) {
-      const auto& func = Downcast<relay::Function>(ref_module_->Lookup(v_node->name_hint));
-      attrs = RelayFuncAttrGetter().GetAttrs(func);
-    } else if (const auto* f_node = call_node->op.as<relay::FunctionNode>()) {
-      attrs = RelayFuncAttrGetter().GetAttrs(call_node->op);
-    } else if (call_node->attrs.defined()) {
+    if (call_node->attrs.defined()) {
       AttrGetter getter(&attrs);
       const_cast<BaseAttrsNode*>(call_node->attrs.get())->VisitAttrs(&getter);
     }
+  } else if (expr.as<relay::FunctionNode>()) {
+    attrs = RelayFuncAttrGetter().GetAttrs(expr);
   } else if (const auto* const_node = expr.as<relay::ConstantNode>()) {
     if (const_node->is_scalar()) {
       const float val = ExprUtils::GetScalar<float>(Downcast<relay::Constant>(expr));
       attrs.Set("scalar", std::to_string(val));
     }
+  } else if (const auto* get_node = expr.as<relay::TupleGetItemNode>()) {
+    attrs.Set("index", std::to_string(get_node->index));
   }
   // Get scope
   Array<String> scope;
@@ -482,18 +464,22 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
   Array<String> input_names;
   Map<String, MSCTensor> node_weights;
   if (const auto* call_node = expr.as<relay::CallNode>()) {
-    const auto& input_types = ExprUtils::GetInputTypes(optype, call_node->args.size());
+    const auto& input_types = ExprUtils::GetInputTypes(optype, call_node->args.size(), false);
     for (size_t i = 0; i < call_node->args.size(); i++) {
       const auto& arg = call_node->args[i];
       ICHECK(expr_tensor_map_.count(arg)) << "Missing argument " << arg;
       if (input_types[i] != "input" && arg.as<relay::ConstantNode>()) {
         const auto& t_name = expr_tensor_map_[arg][0];
         const auto& w_name = SpanUtils::GetAttr(arg->span, "name");
+        const auto& pair = tensor_input_map_[t_name];
+        const auto& producer = Downcast<MSCJoint>(pair.first);
         if (!weights_.count(w_name)) {
-          const auto& pair = tensor_input_map_[t_name];
-          const auto& ref = Downcast<MSCJoint>(pair.first)->OutputAt(pair.second);
+          const auto& ref = producer->OutputAt(pair.second);
           const auto& weight = MSCTensor(w_name, ref->dtype, ref->layout.name(), ref->shape);
           weights_.Set(w_name, weight);
+        }
+        if (producer->HasAttr("scalar")) {
+          attrs.Set(input_types[i], producer->GetTypeAttr<std::string>("scalar"));
         }
         node_weights.Set(input_types[i], weights_[w_name]);
       } else {
@@ -501,6 +487,29 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
           input_names.push_back(in_name);
         }
       }
+    }
+  } else if (const auto* f_node = expr.as<relay::FunctionNode>()) {
+    for (const auto& p : f_node->params) {
+      for (const auto& in_name : expr_tensor_map_[p]) {
+        input_names.push_back(in_name);
+      }
+    }
+    ICHECK(HasFuncScope()) << "Function without func scope " << relay::PrettyPrint(expr);
+    const auto& weight_names = func_scopes_.top().GetFuncWeights();
+    const auto& input_types =
+        ExprUtils::GetInputTypes(optype, f_node->params.size() + weight_names.size(), false);
+    for (size_t i = 0; i < weight_names.size(); i++) {
+      const auto& pair = tensor_input_map_[weight_names[i]];
+      const auto& producer = Downcast<MSCJoint>(pair.first);
+      if (!weights_.count(producer->name)) {
+        const auto& ref = producer->OutputAt(pair.second);
+        const auto& weight = MSCTensor(producer->name, ref->dtype, ref->layout.name(), ref->shape);
+        weights_.Set(producer->name, weight);
+      }
+      if (producer->HasAttr("scalar")) {
+        attrs.Set(input_types[i], producer->GetTypeAttr<std::string>("scalar"));
+      }
+      node_weights.Set(input_types[i + f_node->params.size()], weights_[producer->name]);
     }
   } else if (const auto* tuple_node = expr.as<relay::TupleNode>()) {
     for (const auto& f : tuple_node->fields) {
@@ -521,7 +530,10 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
   // Build outputs
   Array<MSCTensor> outputs;
   const auto& layout = SpanUtils::GetAttr(expr->span, "layout");
-  const auto& checked_type = expr->checked_type_;
+  Type checked_type = expr->checked_type_;
+  if (checked_type.defined() and checked_type.as<relay::FuncTypeNode>()) {
+    checked_type = Downcast<FuncType>(checked_type)->ret_type;
+  }
   if (checked_type.defined()) {
     if (const auto* t_info = checked_type.as<relay::TensorTypeNode>()) {
       Array<Integer> shape;
@@ -538,7 +550,11 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
       }
       ICHECK_EQ(layouts.size(), tuple_info->fields.size())
           << "Layout " << layout << " msimatch with fileds size " << tuple_info->fields.size();
-      for (size_t i = 0; i < tuple_info->fields.size(); i++) {
+      size_t field_size = tuple_info->fields.size();
+      if (optype == "nn.batch_norm") {
+        field_size = 1;
+      }
+      for (size_t i = 0; i < field_size; i++) {
         const auto& t_info = Downcast<relay::TensorType>(tuple_info->fields[i]);
         Array<Integer> shape;
         for (const auto& s : t_info->shape) {
@@ -567,12 +583,48 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
 }
 
 void RelayGraphBuilder::VisitExpr_(const relay::ConstantNode* op) {
-  AddNode(GetRef<relay::Constant>(op));
+  const auto& node = AddNode(GetRef<relay::Constant>(op));
+  if (HasFuncScope()) {
+    func_scopes_.top().AddFuncWeight(node->OutputAt(0)->name);
+  }
+}
+
+void RelayGraphBuilder::VisitExpr_(const relay::FunctionNode* op) {
+  const auto& name_opt = op->GetAttr<runtime::String>(relay::attr::kComposite);
+  if (name_opt.defined()) {
+    StartFuncScope(SpanUtils::GetAttr(op->span, "name"));
+  }
+  RelayExprVisitor::VisitExpr_(op);
+  if (HasFuncScope()) {
+    AddNode(GetRef<relay::Function>(op));
+    EndFuncScope();
+  }
 }
 
 void RelayGraphBuilder::VisitExpr_(const relay::CallNode* op) {
+  if (const auto* f_node = op->op.as<relay::FunctionNode>()) {
+    const auto& name_opt = f_node->GetAttr<runtime::String>(relay::attr::kComposite);
+    if (name_opt.defined()) {
+      for (size_t i = 0; i < op->args.size(); i++) {
+        ICHECK(expr_tensor_map_.count(op->args[i]))
+            << "Can not find argument " << relay::PrettyPrint(op->args[i]);
+        expr_tensor_map_.Set(f_node->params[i], expr_tensor_map_[op->args[i]]);
+      }
+    }
+  }
   RelayExprVisitor::VisitExpr_(op);
-  AddNode(GetRef<relay::Call>(op));
+  if (!HasFuncScope() && op->op->IsInstance<OpNode>()) {
+    try {
+      AddNode(GetRef<relay::Call>(op));
+    } catch (runtime::InternalError& err) {
+      LOG(WARNING) << "Failed to add node from " << relay::PrettyPrint(GetRef<relay::Call>(op))
+                   << " : " << err.message();
+      throw err;
+    }
+  }
+  if (op->op->IsInstance<relay::FunctionNode>() && expr_tensor_map_.count(op->op)) {
+    expr_tensor_map_.Set(GetRef<relay::Call>(op), expr_tensor_map_[op->op]);
+  }
 }
 
 void RelayGraphBuilder::VisitExpr_(const relay::TupleNode* val) {
@@ -584,6 +636,17 @@ void RelayGraphBuilder::VisitExpr_(const relay::TupleGetItemNode* val) {
   RelayExprVisitor::VisitExpr_(val);
   AddNode(GetRef<relay::TupleGetItem>(val));
 }
+
+void RelayGraphBuilder::StartFuncScope(const String& name) {
+  RelayFuncScope func_scope = RelayFuncScope(name);
+  func_scopes_.push(func_scope);
+}
+void RelayGraphBuilder::EndFuncScope() {
+  ICHECK(HasFuncScope()) << "No FuncScope found";
+  func_scopes_.pop();
+}
+
+bool RelayGraphBuilder::HasFuncScope() { return func_scopes_.size() > 0; }
 
 Map<MSCTensor, NDArray> RelayWeightsExtractor::GetWeights(const relay::Function& func) {
   VisitExpr(func);

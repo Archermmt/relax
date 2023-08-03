@@ -16,10 +16,13 @@
 # under the License.
 """tvm.contrib.msc.core.transform.pattern"""
 
+import tvm
+from tvm.relax.dpl import pattern as relax_pattern
+from tvm.relay import dataflow_pattern as relay_pattern
 
-from tvm.relax.dpl.pattern import is_op, is_const, is_tuple_get_item, wildcard
 from tvm.relax.transform import PatternCheckContext
 from tvm.relax.backend.pattern_registry import register_patterns
+from tvm.relay.op.contrib.register import register_pattern_table
 
 
 def make_conv_bias_pattern(op_name):
@@ -33,16 +36,16 @@ def make_conv_bias_pattern(op_name):
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a conv_bias operation
     """
 
-    input = wildcard()
-    weight = is_const()
-    conv = is_op(op_name)(input, weight)
-    bias = is_const()
-    shape = wildcard()
-    reshape = is_op("relax.reshape")(bias, shape)
-    out = is_op("relax.add")(conv, reshape)
+    input = relax_pattern.wildcard()
+    weight = relax_pattern.is_const()
+    conv = relax_pattern.is_op(op_name)(input, weight)
+    bias = relax_pattern.is_const()
+    shape = relax_pattern.wildcard()
+    reshape = relax_pattern.is_op("relax.reshape")(bias, shape)
+    out = relax_pattern.is_op("relax.add")(conv, reshape)
     annotations = {"bias": bias, "reshape": reshape}
     return out, annotations
 
@@ -61,13 +64,13 @@ def make_linear_pattern():
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a linear operation
     """
 
-    input = wildcard()
-    weight = is_const()
-    permute = is_op("relax.permute_dims")(weight)
-    out = is_op("relax.matmul")(input, permute)
+    input = relax_pattern.wildcard()
+    weight = relax_pattern.is_const()
+    permute = relax_pattern.is_op("relax.permute_dims")(weight)
+    out = relax_pattern.is_op("relax.matmul")(input, permute)
     annotations = {"weight": weight, "permute": permute}
     return out, annotations
 
@@ -85,12 +88,12 @@ def make_linear_bias_pattern():
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a linear_bias operation
     """
 
     linear, annotations = make_linear_pattern()
-    bias = is_const()
-    out = is_op("relax.add")(linear, bias)
+    bias = relax_pattern.is_const()
+    out = relax_pattern.is_op("relax.add")(linear, bias)
     annotations.update({"bias": bias, "out": out})
     return out, annotations
 
@@ -103,49 +106,19 @@ def _check_linear_bias(context: PatternCheckContext) -> bool:
     return bias.struct_info.ndim == 1
 
 
-def make_batch_norm_pattern():
-    """A simple utility to create patterns for batch_norm.
-
-    Returns
-    -------
-    pattern: DFPattern
-        The resulting pattern describing a fused operation
-    """
-
-    input = wildcard()
-    gamma = is_const()
-    beta = is_const()
-    mean = is_const()
-    var = is_const()
-    batch_norm = is_op("relax.nn.batch_norm")(input, gamma, beta, mean, var)
-    out = is_tuple_get_item(batch_norm)
-    annotations = {"gamma": gamma, "beta": beta, "mean": mean, "var": var}
-    return out, annotations
-
-
-def _check_batch_norm(context: PatternCheckContext) -> bool:
-    """Check if batch_norm pattern is correct."""
-    """
-    gamma = context.annotated_expr["gamma"]
-    beta = context.annotated_expr["beta"]
-    return gamma.struct_info.ndim == 1 and beta.struct_info.ndim == 1
-    """
-    return True
-
-
 def make_embedding_pattern():
     """A simple utility to create patterns for 1d embedding.
 
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a embedding operation
     """
 
-    weight = is_const()
-    input = wildcard()
-    astype = is_op("relax.astype")(input)
-    out = is_op("relax.take")(weight, astype)
+    weight = relax_pattern.is_const()
+    input = relax_pattern.wildcard()
+    astype = relax_pattern.is_op("relax.astype")(input)
+    out = relax_pattern.is_op("relax.take")(weight, astype)
     annotations = {"weight": weight, "astype": astype}
     return out, annotations
 
@@ -167,17 +140,17 @@ def make_reshape_embedding_pattern():
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a reshaped rembedding operation
     """
 
-    weight = is_const()
-    input = wildcard()
-    astype = is_op("relax.astype")(input)
-    reduce_shape = wildcard()
-    reduce_in = is_op("relax.reshape")(astype, reduce_shape)
-    take = is_op("relax.take")(weight, reduce_in)
-    expand_shape = wildcard()
-    out = is_op("relax.reshape")(take, expand_shape)
+    weight = relax_pattern.is_const()
+    input = relax_pattern.wildcard()
+    astype = relax_pattern.is_op("relax.astype")(input)
+    reduce_shape = relax_pattern.wildcard()
+    reduce_in = relax_pattern.is_op("relax.reshape")(astype, reduce_shape)
+    take = relax_pattern.is_op("relax.take")(weight, reduce_in)
+    expand_shape = relax_pattern.wildcard()
+    out = relax_pattern.is_op("relax.reshape")(take, expand_shape)
     annotations = {"weight": weight, "astype": astype, "reduce_in": reduce_in}
     return out, annotations
 
@@ -200,16 +173,16 @@ def make_attention_pattern():
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a attention operation
     """
 
-    q = wildcard()
-    k = wildcard()
-    v = wildcard()
-    q_trans = is_op("relax.permute_dims")(q)
-    k_trans = is_op("relax.permute_dims")(k)
-    v_trans = is_op("relax.permute_dims")(v)
-    out = is_op("relax.nn.attention")(q_trans, k_trans, v_trans)
+    q = relax_pattern.wildcard()
+    k = relax_pattern.wildcard()
+    v = relax_pattern.wildcard()
+    q_trans = relax_pattern.is_op("relax.permute_dims")(q)
+    k_trans = relax_pattern.is_op("relax.permute_dims")(k)
+    v_trans = relax_pattern.is_op("relax.permute_dims")(v)
+    out = relax_pattern.is_op("relax.nn.attention")(q_trans, k_trans, v_trans)
     annotations = {"q_trans": q_trans, "k_trans": k_trans, "v_trans": v_trans}
     return out, annotations
 
@@ -225,17 +198,17 @@ def make_mask_attention_pattern():
     Returns
     -------
     pattern: DFPattern
-        The resulting pattern describing a fused operation
+        The resulting pattern describing a mask_attention operation
     """
 
-    q = wildcard()
-    k = wildcard()
-    v = wildcard()
-    mask = wildcard()
-    q_trans = is_op("relax.permute_dims")(q)
-    k_trans = is_op("relax.permute_dims")(k)
-    v_trans = is_op("relax.permute_dims")(v)
-    out = is_op("relax.nn.attention_bias")(q_trans, k_trans, v_trans, mask)
+    q = relax_pattern.wildcard()
+    k = relax_pattern.wildcard()
+    v = relax_pattern.wildcard()
+    mask = relax_pattern.wildcard()
+    q_trans = relax_pattern.is_op("relax.permute_dims")(q)
+    k_trans = relax_pattern.is_op("relax.permute_dims")(k)
+    v_trans = relax_pattern.is_op("relax.permute_dims")(v)
+    out = relax_pattern.is_op("relax.nn.attention_bias")(q_trans, k_trans, v_trans, mask)
     annotations = {"q_trans": q_trans, "k_trans": k_trans, "v_trans": v_trans}
     return out, annotations
 
@@ -245,6 +218,7 @@ def _check_mask_attention(context: PatternCheckContext) -> bool:
     return True
 
 
+# TODO(tong.meng): support patterns after optimize
 register_patterns(
     [
         (
@@ -293,3 +267,215 @@ register_patterns(
         ),
     ]
 )
+
+
+# TODO(tong.meng): support patterns after optimize
+@register_pattern_table("msc")
+def pattern_table():
+    """Returns list of triples describing the name, dataflow pattern and predicate for all
+    the MSC-supported operators."""
+
+    def make_conv_bias_pattern(op_name, optimized=False):
+        """A simple utility to create patterns for an operation fused with bias.
+
+        Parameters
+        ----------
+        op_name: str
+            The name of a Relay op, such as "relay.nn.conv2d"
+        optimized: bool
+            Whether the relay is optimized
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a conv_bias operation
+        """
+
+        data = relay_pattern.wildcard()
+        weight = relay_pattern.is_constant()
+        bias = relay_pattern.is_constant()
+        conv = relay_pattern.is_op(op_name)(data, weight)
+        if optimized:
+            out = relay_pattern.is_op("add")(conv, bias)
+        else:
+            out = relay_pattern.is_op("nn.bias_add")(conv, bias)
+        return out
+
+    def _check_conv_bias(call: tvm.relay.Expr) -> bool:
+        """Check if conv_bias fuse pattern is correct."""
+
+        if call.op.name == "nn.bias_add":
+            bias = call.args[1]
+            return len(bias.checked_type.shape) == 1
+        if call.op.name == "add":
+            return True
+        return False
+
+    def make_linear_pattern(optimized=False):
+        """A simple utility to create patterns for linear.
+
+        Parameters
+        ----------
+        optimized: bool
+            Whether the relay is optimized
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a linear operation
+        """
+
+        if optimized:
+            data = relay_pattern.wildcard()
+            weight = relay_pattern.is_constant()
+            broadcast_data = relay_pattern.is_op("broadcast_to")(data)
+            reshape_data = relay_pattern.is_op("reshape")(broadcast_data)
+            batch_matmul = relay_pattern.is_op("nn.batch_matmul")(reshape_data, weight)
+            reshape_out = relay_pattern.is_op("reshape")(batch_matmul)
+            return relay_pattern.is_op("squeeze")(reshape_out)
+        data = relay_pattern.wildcard()
+        weight = relay_pattern.is_constant()
+        trans_weight = relay_pattern.is_op("transpose")(weight)
+        broadcast_data = relay_pattern.is_op("broadcast_to")(data)
+        broadcast_weight = relay_pattern.is_op("broadcast_to")(trans_weight)
+        reshape_data = relay_pattern.is_op("reshape")(broadcast_data)
+        reshape_weight = relay_pattern.is_op("reshape")(broadcast_weight)
+        batch_matmul = relay_pattern.is_op("nn.batch_matmul")(reshape_data, reshape_weight)
+        reshape_out = relay_pattern.is_op("reshape")(batch_matmul)
+        return relay_pattern.is_op("squeeze")(reshape_out)
+
+    def _check_linear(call: tvm.relay.Expr) -> bool:
+        """Check if linear pattern is correct."""
+        return True
+
+    def make_linear_bias_pattern(optimized=False):
+        """A simple utility to create patterns for linear_bias.
+
+        Parameters
+        ----------
+        optimized: bool
+            Whether the relay is optimized
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a linear_bias operation
+        """
+
+        bias = relay_pattern.is_constant()
+        linear = make_linear_pattern(optimized)
+        if optimized:
+            out = relay_pattern.is_op("add")(linear, bias)
+        else:
+            out = relay_pattern.is_op("nn.bias_add")(linear, bias)
+        return out
+
+    def _check_linear_bias(call: tvm.relay.Expr) -> bool:
+        """Check if linear_bias pattern is correct."""
+        return True
+
+    def make_matmul_pattern(dim=2, optimized=False):
+        """A simple utility to create patterns for matmul.
+
+        Parameters
+        ----------
+        optimized: bool
+            Whether the relay is optimized
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a matmul operation
+        """
+
+        if dim == 2:
+            a = relay_pattern.wildcard()
+            b = relay_pattern.wildcard()
+            trans_b = relay_pattern.is_op("transpose")(b)
+            dense = relay_pattern.is_op("nn.dense")(a, trans_b)
+            return dense | relay_pattern.is_op("squeeze")(dense)
+        elif dim == 3:
+            a = relay_pattern.wildcard()
+            b = relay_pattern.wildcard()
+            broadcast_a = relay_pattern.is_op("broadcast_to")(a)
+            broadcast_b = relay_pattern.is_op("broadcast_to")(b)
+            reshape_a = relay_pattern.is_op("reshape")(broadcast_a)
+            reshape_b = relay_pattern.is_op("reshape")(broadcast_b)
+            batch_matmul = relay_pattern.is_op("nn.batch_matmul")(reshape_a, reshape_b)
+            reshape_out = relay_pattern.is_op("reshape")(batch_matmul)
+            return relay_pattern.is_op("squeeze")(reshape_out)
+        else:
+            raise Exception("matmul pattern only support dim 2 and 3")
+
+    def _check_matmul(call: tvm.relay.Expr) -> bool:
+        """Check if matmul pattern is correct."""
+        last_call = call.args[0] if call.op.name == "squeeze" else call
+        if last_call.op.name == "nn.dense":
+            trans_b = last_call.args[1]
+            b = trans_b.args[0]
+            if len(b.checked_type.shape) != 2:
+                return False
+            return trans_b.attrs["axes"] is None or list(trans_b.attrs["axes"]) == [1, 0]
+        return True
+
+    def make_embedding_pattern(optimized=False):
+        """A simple utility to create patterns for 1d embedding.
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a embedding operation
+        """
+
+        weight = relay_pattern.is_constant()
+        input = relay_pattern.wildcard()
+        astype = relay_pattern.is_op("cast")(input)
+        return relay_pattern.is_op("take")(weight, astype)
+
+    def _check_embedding(call) -> bool:
+        """Check if embedding pattern is correct."""
+
+        weight = call.args[0]
+        cast = call.args[1]
+        return (
+            cast.attrs["dtype"] == "int32"
+            and len(weight.checked_type.shape) == 2
+            and weight.checked_type.dtype == "float32"
+        )
+
+    def make_gelu_pattern(optimized=False):
+        """A simple utility to create patterns for gelu.
+
+        Returns
+        -------
+        pattern: DFPattern
+            The resulting pattern describing a gelu operation.
+        """
+
+        input = relay_pattern.wildcard()
+        factor_1 = relay_pattern.is_constant()
+        mul_1 = relay_pattern.is_op("multiply")(input, factor_1)
+        erf = relay_pattern.is_op("erf")(mul_1)
+        factor_2 = relay_pattern.is_constant()
+        mul_2 = relay_pattern.is_op("multiply")(erf, factor_2)
+        factor_3 = relay_pattern.is_constant()
+        add = relay_pattern.is_op("add")(factor_3, mul_2)
+        return relay_pattern.is_op("multiply")(input, add)
+
+    def _check_gelu(call) -> bool:
+        """Check if gelu pattern is correct."""
+        return True
+
+    return [
+        ("msc.conv1d_bias", make_conv_bias_pattern("nn.conv1d"), _check_conv_bias),
+        ("msc.conv1d_bias", make_conv_bias_pattern("nn.conv1d", True), _check_conv_bias),
+        ("msc.conv2d_bias", make_conv_bias_pattern("nn.conv2d"), _check_conv_bias),
+        ("msc.conv2d_bias", make_conv_bias_pattern("nn.conv2d", True), _check_conv_bias),
+        ("msc.linear_bias", make_linear_bias_pattern(), _check_linear_bias),
+        ("msc.linear", make_linear_pattern(), _check_linear),
+        ("msc.linear", make_linear_pattern(True), _check_linear),
+        ("msc.matmul", make_matmul_pattern(dim=2), _check_matmul),
+        ("msc.matmul", make_matmul_pattern(dim=3), _check_matmul),
+        ("msc.embedding", make_embedding_pattern(), _check_embedding),
+        ("msc.gelu", make_gelu_pattern(), _check_gelu),
+    ]

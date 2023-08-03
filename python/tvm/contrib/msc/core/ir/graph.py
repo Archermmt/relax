@@ -63,7 +63,7 @@ class MSCTensor(Object):
 
     @property
     def dtype_name(self):
-        return _ffi_api.MSCTensorDtypeName(self)
+        return _ffi_api.MSCTensorDTypeName(self)
 
     @property
     def ndim(self):

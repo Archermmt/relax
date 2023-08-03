@@ -18,9 +18,9 @@
  */
 
 /*!
- * \file src/contrib/msc/framework/tvm/relax_codegen.cc
+ * \file src/contrib/msc/framework/tvm/codegne.cc
  */
-#include "relax_codegen.h"
+#include "codegen.h"
 
 namespace tvm {
 namespace contrib {
@@ -50,8 +50,8 @@ void RelaxGraphCodeGen::CodeGenGraph() {
       stack_.call_start("relax.Var")
           .call_str_arg(pair.second->name)
           .call_inplace_start("relax.TensorStructInfo")
-          .call_list_arg(pair.second->shape)
-          .call_str_arg(pair.second->DtypeName())
+          .call_list_arg(pair.second->shape, "", true)
+          .call_str_arg(pair.second->DTypeName())
           .call_inplace_end()
           .call_end(idx_weight)
           .call_start("inputs.append")
@@ -112,7 +112,7 @@ void RelaxGraphCodeGen::CodeGenInference() {
         .call_str_arg(i->alias)
         .call_inplace_start("relax.TensorStructInfo")
         .call_list_arg(i->shape)
-        .call_str_arg(i->DtypeName())
+        .call_str_arg(i->DTypeName())
         .call_inplace_end()
         .call_end(IdxNode(pair.first));
   }

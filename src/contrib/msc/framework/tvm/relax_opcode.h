@@ -25,42 +25,14 @@
 #define TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_OPCODE_H_
 
 #include "../../core/codegen/base_codegen.h"
+#include "config.h"
 
 namespace tvm {
 namespace contrib {
 namespace msc {
 
-/*!
- * \brief CodeGen config for relax
- */
-struct RelaxCodeDenConfig {
-  bool explicit_name{true};
-  CODEGEN_CONFIG_MEMBERS
-  void Load(dmlc::JSONReader* reader) {
-    std::string key;
-    reader->BeginObject();
-    while (reader->NextObjectItem(&key)) {
-      if (key == "explicit_name") {
-        reader->Read(&explicit_name);
-      } else {
-        CODEGEN_CONFIG_PARSE
-      }
-    }
-  }
-};
-
-/*!
- * \brief CodeStack for relax op
- */
 class RelaxOpCodeGen;
-class RelaxOpCodeStack : public OpCodeStack<RelaxOpCodeGen> {
- public:
-  /*!
-   * \brief The constructor of RelaxOpCodeStack
-   * \param codegen the OpCodeGen pointer.
-   */
-  explicit RelaxOpCodeStack(RelaxOpCodeGen* codegen) : OpCodeStack<RelaxOpCodeGen>(codegen) {}
-};
+typedef OpCodeStack<RelaxOpCodeGen> RelaxOpCodeStack;
 
 /*!
  * \brief CodeGen for relax op
@@ -83,6 +55,12 @@ class RelaxOpCodeGen : public BaseOpCodeGen<RelaxCodeDenConfig> {
 
   /*! \brief coda stack emit docs*/
   void BuilderEmit(RelaxOpCodeStack& stack, const String& ret, const String& name = "");
+
+  /*! \brief Get the out_dtype attribute*/
+  const std::string GetOutDtype(const String& key = "out_dtype");
+
+  /*! \brief Get the axes attribute*/
+  const std::vector<int> GetAxes(const String& key = "axes");
 };
 
 /*!

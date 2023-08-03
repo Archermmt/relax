@@ -18,14 +18,15 @@
  */
 
 /*!
- * \file src/contrib/msc/framework/tvm/relax_codegen.h
+ * \file src/contrib/msc/framework/tvm/codegen.h
  * \brief Relax codegen for MSCGraph.
  */
-#ifndef TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_CODEGEN_H_
-#define TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_CODEGEN_H_
+#ifndef TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_
+#define TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_
 
 #include "../../core/codegen/base_codegen.h"
 #include "../../core/codegen/py_codegen.h"
+#include "config.h"
 #include "relax_opcode.h"
 
 namespace tvm {
@@ -65,4 +66,4 @@ class RelaxGraphCodeGen : public PyGraphCodeGen<RelaxCodeDenConfig> {
 }  // namespace contrib
 }  // namespace tvm
 
-#endif  // TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_CODEGEN_H_
+#endif  // TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_

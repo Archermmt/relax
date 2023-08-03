@@ -56,7 +56,7 @@ def to_relax(
     sources = _ffi_api.GetRelaxSources(
         graph, msc_utils.dump_dict(codegen_config), msc_utils.dump_dict(print_config)
     )
-    build_folder = build_folder or msc_utils.msc_dir(cleanup=True)
+    build_folder = build_folder or msc_utils.msc_dir(keep_history=False, cleanup=True)
     with build_folder as d:
         for name, source in sources.items():
             d.add_file(name, source)

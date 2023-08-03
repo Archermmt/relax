@@ -106,7 +106,7 @@ const Integer MSCTensorNode::GetSize() const {
   return size;
 }
 
-const String MSCTensorNode::DtypeName() const { return runtime::DLDataType2String(dtype); }
+const String MSCTensorNode::DTypeName() const { return runtime::DLDataType2String(dtype); }
 
 size_t BaseJointNode::AddChild(const BaseJoint& child) const {
   for (size_t i = 0; i < children.size(); i++) {
@@ -141,6 +141,10 @@ bool BaseJointNode::GetAttr(const String& key, std::string* val) const {
 bool BaseJointNode::GetAttr(const String& key, int* val) const {
   std::string val_str;
   if (GetAttr(key, &val_str)) {
+    int pos = val_str.find(",");
+    if (pos > 0) {
+      return false;
+    }
     try {
       *val = std::stoi(val_str);
       return true;
@@ -189,6 +193,10 @@ bool BaseJointNode::GetAttr(const String& key, bool* val) const {
 bool BaseJointNode::GetAttr(const String& key, std::vector<int>* val) const {
   std::string val_str;
   if (GetAttr(key, &val_str)) {
+    int pos = val_str.find(",");
+    if (pos < 0) {
+      return false;
+    }
     try {
       for (const auto& s : StringUtils::Split(val_str, ",")) {
         (*val).push_back(std::stoi(std::string(s)));
@@ -205,6 +213,10 @@ bool BaseJointNode::GetAttr(const String& key, std::vector<int64_t>* val) const 
   std::string val_str;
   if (GetAttr(key, &val_str)) {
     try {
+      int pos = val_str.find(",");
+      if (pos < 0) {
+        return false;
+      }
       for (const auto& s : StringUtils::Split(val_str, ",")) {
         (*val).push_back(std::stol(std::string(s)));
       }
@@ -218,6 +230,10 @@ bool BaseJointNode::GetAttr(const String& key, std::vector<int64_t>* val) const 
 bool BaseJointNode::GetAttr(const String& key, std::vector<float>* val) const {
   std::string val_str;
   if (GetAttr(key, &val_str)) {
+    int pos = val_str.find(",");
+    if (pos < 0) {
+      return false;
+    }
     try {
       for (const auto& s : StringUtils::Split(val_str, ",")) {
         (*val).push_back(std::atof(std::string(s).c_str()));
@@ -1035,8 +1051,8 @@ TVM_REGISTER_GLOBAL("msc.core.MSCJointGetInputs")
 TVM_REGISTER_GLOBAL("msc.core.MSCJointGetOutputs")
     .set_body_typed([](const MSCJoint& node) -> Array<MSCTensor> { return node->GetOutputs(); });
 
-TVM_REGISTER_GLOBAL("msc.core.MSCTensorDtypeName")
-    .set_body_typed([](const MSCTensor& tensor) -> String { return tensor->DtypeName(); });
+TVM_REGISTER_GLOBAL("msc.core.MSCTensorDTypeName")
+    .set_body_typed([](const MSCTensor& tensor) -> String { return tensor->DTypeName(); });
 
 }  // namespace msc
 }  // namespace contrib

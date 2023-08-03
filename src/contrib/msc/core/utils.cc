@@ -213,19 +213,23 @@ const Map<String, String> SpanUtils::GetAttrs(const Span& span) {
   return attrs;
 }
 
-const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs_num) {
+const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs_num,
+                                             bool as_relax) {
   Array<String> input_types;
-  if (optype == "broadcast_to" || optype == "reshape") {
+  if (as_relax && (optype == "broadcast_to" || optype == "reshape")) {
     input_types.push_back("input");
     input_types.push_back("shape");
-  } else if (optype == "clip") {
+  } else if (optype == "clip" && as_relax) {
     input_types.push_back("input");
     input_types.push_back("min");
     input_types.push_back("max");
-  } else if (optype == "full") {
+  } else if (optype == "full" && as_relax) {
     input_types.push_back("shape");
     input_types.push_back("input");
-  } else if (optype == "image.resize2d") {
+  } else if (optype == "trilu") {
+    input_types.push_back("input");
+    input_types.push_back("k");
+  } else if (optype == "image.resize2d" && as_relax) {
     input_types.push_back("input");
     input_types.push_back("size");
   } else if (optype == "nn.conv1d" || optype == "nn.conv2d" || optype == "nn.conv3d") {
@@ -242,16 +246,28 @@ const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs
     input_types.push_back("gamma");
     input_types.push_back("beta");
   } else if (optype == "msc.linear") {
-    input_types.push_back("weight");
-    input_types.push_back("input");
+    if (as_relax) {
+      input_types.push_back("weight");
+      input_types.push_back("input");
+    } else {
+      input_types.push_back("input");
+      input_types.push_back("weight");
+    }
   } else if (optype == "msc.conv1d_bias" || optype == "msc.conv2d_bias") {
     input_types.push_back("input");
     input_types.push_back("weight");
     input_types.push_back("bias");
-    input_types.push_back("expand_bias");
+    if (as_relax) {
+      input_types.push_back("expand_bias");
+    }
   } else if (optype == "msc.linear_bias") {
-    input_types.push_back("weight");
-    input_types.push_back("input");
+    if (as_relax) {
+      input_types.push_back("weight");
+      input_types.push_back("input");
+    } else {
+      input_types.push_back("input");
+      input_types.push_back("weight");
+    }
     input_types.push_back("bias");
   } else if (optype == "msc.embedding" && inputs_num == 2) {
     input_types.push_back("input");
@@ -261,6 +277,11 @@ const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs
     input_types.push_back("reduce_in");
     input_types.push_back("weight");
     input_types.push_back("expand_out");
+  } else if (optype == "msc.gelu") {
+    input_types.push_back("input");
+    input_types.push_back("factor_1");
+    input_types.push_back("factor_2");
+    input_types.push_back("factor_3");
   } else {
     for (size_t i = 0; i < inputs_num; i++) {
       input_types.push_back("input");
@@ -274,12 +295,12 @@ const Array<String> ExprUtils::GetInputTypes(const String& optype, size_t inputs
 
 const Array<String> ExprUtils::GetInputTypes(const RelaxCall& call) {
   const String& optype = StringUtils::Replace(Downcast<Op>(call->op)->name, "relax.", "");
-  return GetInputTypes(optype, call->args.size());
+  return GetInputTypes(optype, call->args.size(), true);
 }
 
 const Array<String> ExprUtils::GetInputTypes(const RelayCall& call) {
   const String& optype = StringUtils::Replace(Downcast<Op>(call->op)->name, "relay.", "");
-  return GetInputTypes(optype, call->args.size());
+  return GetInputTypes(optype, call->args.size(), false);
 }
 
 TVM_REGISTER_GLOBAL("msc.core.SpanGetAttr").set_body_typed(SpanUtils::GetAttr);

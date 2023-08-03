@@ -215,7 +215,7 @@ class MSCTensorNode : public Object {
   /*! \brief Get size of the tensor. */
   const Integer GetSize() const;
   /*! \brief Get name of the dtype. */
-  const String DtypeName() const;
+  const String DTypeName() const;
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("name", &name);
@@ -310,6 +310,19 @@ class BaseJointNode : public Object {
   bool GetAttr(const String& key, std::vector<int>* val) const;
   bool GetAttr(const String& key, std::vector<int64_t>* val) const;
   bool GetAttr(const String& key, std::vector<float>* val) const;
+  /*! \brief Check and get the attribute by type. */
+  template <typename T>
+  const T GetTypeAttr(const String& key) const {
+    T val;
+    ICHECK(GetAttr(key, &val)) << "Can not get attr " << key;
+    return val;
+  };
+  template <typename T>
+  const std::vector<T> GetTypeArrayAttr(const String& key) const {
+    std::vector<T> val;
+    ICHECK(GetAttr(key, &val)) << "Can not get attr " << key;
+    return val;
+  };
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("index", &index);

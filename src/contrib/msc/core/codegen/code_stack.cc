@@ -166,11 +166,15 @@ void BaseStack::CallArgument(const ExprDoc& value, const String& key) {
 }
 
 void BaseStack::CallStrArg(const String& value, const String& key) {
-  CallArgument(DocUtils::ToStrDoc(value), key);
+  if (value.size() > 0) {
+    CallArgument(DocUtils::ToStrDoc(value), key);
+  }
 }
 
-void BaseStack::CallListArg(const Array<ExprDoc>& values, const String& key) {
-  CallArgument(ListDoc(values), key);
+void BaseStack::CallListArg(const Array<ExprDoc>& values, const String& key, bool allow_empty) {
+  if (values.size() > 0 || allow_empty) {
+    CallArgument(ListDoc(values), key);
+  }
 }
 
 void BaseStack::CallInplaceStart(const String& callee) { CallStart(callee); }

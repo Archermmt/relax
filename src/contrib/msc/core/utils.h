@@ -193,7 +193,8 @@ class ExprUtils {
    * \brief Get the input types of call.
    * \return The input types.
    */
-  TVM_DLL static const Array<String> GetInputTypes(const String& optype, size_t inputs_num);
+  TVM_DLL static const Array<String> GetInputTypes(const String& optype, size_t inputs_num,
+                                                   bool as_relax);
 
   /*!
    * \brief Get the input types of call.

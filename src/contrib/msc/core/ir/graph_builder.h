@@ -205,7 +205,6 @@ class RelaxWeightsExtractor : public RelaxExprVisitor {
   Map<MSCTensor, NDArray> weights_;
 };
 
-
 class RelayFuncAttrGetter : public RelayExprVisitor {
  public:
   Map<String, String> GetAttrs(const Expr& expr) {
@@ -217,6 +216,25 @@ class RelayFuncAttrGetter : public RelayExprVisitor {
 
  private:
   Map<String, String> attrs_;
+};
+
+/*!
+ * \brief A Scope for recording func
+ */
+class RelayFuncScope {
+ public:
+  /*! \brief The constructor */
+  RelayFuncScope(const String& name) : name_(name) {}
+  /*! \brief Add a weight */
+  void AddFuncWeight(const String& weight) { func_weights_.push_back(weight); }
+  /*! \brief Get weights */
+  const Array<String> GetFuncWeights() { return func_weights_; }
+
+ private:
+  /*! \brief The scope name, thus func name */
+  String name_;
+  /*! \brief The constants in the scope */
+  Array<String> func_weights_;
 };
 
 class RelayGraphBuilder : public RelayExprVisitor {
@@ -236,6 +254,9 @@ class RelayGraphBuilder : public RelayExprVisitor {
       dmlc::JSONReader reader(&is);
       reader.Read(&config_);
     }
+    while (!func_scopes_.empty()) {
+      func_scopes_.pop();
+    }
   }
 
   MSCGraph Build(const relay::Function& func);
@@ -244,11 +265,21 @@ class RelayGraphBuilder : public RelayExprVisitor {
 
   void VisitExpr_(const relay::ConstantNode* op) final;
 
+  void VisitExpr_(const relay::FunctionNode* op) final;
+
   void VisitExpr_(const relay::CallNode* op) final;
 
   void VisitExpr_(const relay::TupleNode* val) final;
 
   void VisitExpr_(const relay::TupleGetItemNode* val) final;
+
+ protected:
+  /*! \brief Start a func scope */
+  void StartFuncScope(const String& scope);
+  /*! \brief End a func scope */
+  void EndFuncScope();
+  /*! \brief Check if has func scopes left */
+  bool HasFuncScope();
 
  private:
   String name_;
@@ -258,6 +289,7 @@ class RelayGraphBuilder : public RelayExprVisitor {
   Map<String, MSCTensor> weights_;
   Map<Expr, Array<String>> expr_tensor_map_;
   std::unordered_map<String, std::pair<BaseJoint, size_t>> tensor_input_map_;
+  std::stack<RelayFuncScope> func_scopes_;
 };
 
 class RelayWeightsExtractor : public RelayExprVisitor {

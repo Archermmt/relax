@@ -21,7 +21,6 @@ from torch.nn import Module
 import tvm.testing
 from tvm.relax.frontend.torch import from_fx
 from tvm.contrib.msc.core.ir import translate
-from tvm.contrib.msc.core import utils as msc_utils
 from tvm.contrib.msc.framework.tvm import codegen as tvm_codegen
 
 
@@ -30,10 +29,7 @@ def verify_model(torch_model, input_info):
     with torch.no_grad():
         expected = from_fx(graph_model, input_info)
     graph, weights = translate.from_relax(expected)
-    build_folder = msc_utils.msc_dir(keep_history=False, cleanup=True)
-    mod = tvm_codegen.to_relax(
-        graph, weights, codegen_config={"explicit_name": False}, build_folder=build_folder
-    )
+    mod = tvm_codegen.to_relax(graph, weights, codegen_config={"explicit_name": False})
     tvm.ir.assert_structural_equal(mod, expected)
 
 
@@ -515,8 +511,6 @@ def test_size():
 
 
 def test_squeeze():
-    input_info = [([3, 1, 4, 1], "float32")]
-
     class Squeeze1(Module):
         def forward(self, input):
             return input.squeeze(1)
@@ -525,6 +519,7 @@ def test_squeeze():
         def forward(self, input):
             return input.squeeze()
 
+    input_info = [([3, 1, 4, 1], "float32")]
     verify_model(Squeeze1(), input_info)
     verify_model(Squeeze2(), input_info)
 
