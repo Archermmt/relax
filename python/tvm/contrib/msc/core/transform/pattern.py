@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=unused-argument
 """tvm.contrib.msc.core.transform.pattern"""
 
 import tvm
@@ -25,7 +26,7 @@ from tvm.relax.backend.pattern_registry import register_patterns
 from tvm.relay.op.contrib.register import register_pattern_table
 
 
-def make_conv_bias_pattern(op_name):
+def make_relax_conv_bias_pattern(op_name):
     """A simple utility to create patterns for an operation fused with bias.
 
     Parameters
@@ -39,9 +40,9 @@ def make_conv_bias_pattern(op_name):
         The resulting pattern describing a conv_bias operation
     """
 
-    input = relax_pattern.wildcard()
+    data = relax_pattern.wildcard()
     weight = relax_pattern.is_const()
-    conv = relax_pattern.is_op(op_name)(input, weight)
+    conv = relax_pattern.is_op(op_name)(data, weight)
     bias = relax_pattern.is_const()
     shape = relax_pattern.wildcard()
     reshape = relax_pattern.is_op("relax.reshape")(bias, shape)
@@ -50,7 +51,7 @@ def make_conv_bias_pattern(op_name):
     return out, annotations
 
 
-def _check_conv_bias(context: PatternCheckContext) -> bool:
+def _check_relax_conv_bias(context: PatternCheckContext) -> bool:
     """Check if conv_bias fuse pattern is correct."""
     bias = context.annotated_expr["bias"]
     reshape = context.annotated_expr["reshape"]
@@ -58,7 +59,7 @@ def _check_conv_bias(context: PatternCheckContext) -> bool:
     return non_one_dims <= 1 and bias.struct_info.ndim == 1
 
 
-def make_linear_pattern():
+def make_relax_linear_pattern():
     """A simple utility to create patterns for linear.
 
     Returns
@@ -67,22 +68,22 @@ def make_linear_pattern():
         The resulting pattern describing a linear operation
     """
 
-    input = relax_pattern.wildcard()
+    data = relax_pattern.wildcard()
     weight = relax_pattern.is_const()
     permute = relax_pattern.is_op("relax.permute_dims")(weight)
-    out = relax_pattern.is_op("relax.matmul")(input, permute)
+    out = relax_pattern.is_op("relax.matmul")(data, permute)
     annotations = {"weight": weight, "permute": permute}
     return out, annotations
 
 
-def _check_linear(context: PatternCheckContext) -> bool:
+def _check_relax_linear(context: PatternCheckContext) -> bool:
     """Check if linear pattern is correct."""
     weight = context.annotated_expr["weight"]
     permute = context.annotated_expr["permute"]
     return weight.struct_info.ndim == 2 and not permute.attrs["axes"]
 
 
-def make_linear_bias_pattern():
+def make_relax_linear_bias_pattern():
     """A simple utility to create patterns for linear with bias.
 
     Returns
@@ -91,23 +92,23 @@ def make_linear_bias_pattern():
         The resulting pattern describing a linear_bias operation
     """
 
-    linear, annotations = make_linear_pattern()
+    linear, annotations = make_relax_linear_pattern()
     bias = relax_pattern.is_const()
     out = relax_pattern.is_op("relax.add")(linear, bias)
     annotations.update({"bias": bias, "out": out})
     return out, annotations
 
 
-def _check_linear_bias(context: PatternCheckContext) -> bool:
+def _check_relax_linear_bias(context: PatternCheckContext) -> bool:
     """Check if linear_bias pattern is correct."""
-    if not _check_linear(context):
+    if not _check_relax_linear(context):
         return False
     bias = context.annotated_expr["bias"]
     return bias.struct_info.ndim == 1
 
 
-def make_embedding_pattern():
-    """A simple utility to create patterns for 1d embedding.
+def make_relax_embedding_pattern():
+    """A simple utility to create patterns for embedding.
 
     Returns
     -------
@@ -116,14 +117,14 @@ def make_embedding_pattern():
     """
 
     weight = relax_pattern.is_const()
-    input = relax_pattern.wildcard()
-    astype = relax_pattern.is_op("relax.astype")(input)
+    data = relax_pattern.wildcard()
+    astype = relax_pattern.is_op("relax.astype")(data)
     out = relax_pattern.is_op("relax.take")(weight, astype)
     annotations = {"weight": weight, "astype": astype}
     return out, annotations
 
 
-def _check_embedding(context: PatternCheckContext) -> bool:
+def _check_relax_embedding(context: PatternCheckContext) -> bool:
     """Check if 1d embedding pattern is correct."""
     weight = context.annotated_expr["weight"]
     astype = context.annotated_expr["astype"]
@@ -134,7 +135,7 @@ def _check_embedding(context: PatternCheckContext) -> bool:
     )
 
 
-def make_reshape_embedding_pattern():
+def make_relax_reshape_embedding_pattern():
     """A simple utility to create patterns for reshaped embedding.
 
     Returns
@@ -144,8 +145,8 @@ def make_reshape_embedding_pattern():
     """
 
     weight = relax_pattern.is_const()
-    input = relax_pattern.wildcard()
-    astype = relax_pattern.is_op("relax.astype")(input)
+    data = relax_pattern.wildcard()
+    astype = relax_pattern.is_op("relax.astype")(data)
     reduce_shape = relax_pattern.wildcard()
     reduce_in = relax_pattern.is_op("relax.reshape")(astype, reduce_shape)
     take = relax_pattern.is_op("relax.take")(weight, reduce_in)
@@ -155,7 +156,7 @@ def make_reshape_embedding_pattern():
     return out, annotations
 
 
-def _check_reshape_embedding(context: PatternCheckContext) -> bool:
+def _check_relax_reshape_embedding(context: PatternCheckContext) -> bool:
     """Check if reshape embedding pattern is correct."""
     weight = context.annotated_expr["weight"]
     if weight.struct_info.ndim != 2 or weight.struct_info.dtype != "float32":
@@ -167,7 +168,7 @@ def _check_reshape_embedding(context: PatternCheckContext) -> bool:
     return True
 
 
-def make_attention_pattern():
+def make_relax_attention_pattern():
     """A simple utility to create patterns for attention.
 
     Returns
@@ -176,23 +177,23 @@ def make_attention_pattern():
         The resulting pattern describing a attention operation
     """
 
-    q = relax_pattern.wildcard()
-    k = relax_pattern.wildcard()
-    v = relax_pattern.wildcard()
-    q_trans = relax_pattern.is_op("relax.permute_dims")(q)
-    k_trans = relax_pattern.is_op("relax.permute_dims")(k)
-    v_trans = relax_pattern.is_op("relax.permute_dims")(v)
+    weight_q = relax_pattern.wildcard()
+    weight_k = relax_pattern.wildcard()
+    weight_v = relax_pattern.wildcard()
+    q_trans = relax_pattern.is_op("relax.permute_dims")(weight_q)
+    k_trans = relax_pattern.is_op("relax.permute_dims")(weight_k)
+    v_trans = relax_pattern.is_op("relax.permute_dims")(weight_v)
     out = relax_pattern.is_op("relax.nn.attention")(q_trans, k_trans, v_trans)
     annotations = {"q_trans": q_trans, "k_trans": k_trans, "v_trans": v_trans}
     return out, annotations
 
 
-def _check_attention(context: PatternCheckContext) -> bool:
+def _check_relax_attention(context: PatternCheckContext) -> bool:
     """Check if attention pattern is correct."""
     return True
 
 
-def make_mask_attention_pattern():
+def make_relax_mask_attention_pattern():
     """A simple utility to create patterns for mask_attention.
 
     Returns
@@ -201,19 +202,19 @@ def make_mask_attention_pattern():
         The resulting pattern describing a mask_attention operation
     """
 
-    q = relax_pattern.wildcard()
-    k = relax_pattern.wildcard()
-    v = relax_pattern.wildcard()
+    weight_q = relax_pattern.wildcard()
+    weight_k = relax_pattern.wildcard()
+    weight_v = relax_pattern.wildcard()
     mask = relax_pattern.wildcard()
-    q_trans = relax_pattern.is_op("relax.permute_dims")(q)
-    k_trans = relax_pattern.is_op("relax.permute_dims")(k)
-    v_trans = relax_pattern.is_op("relax.permute_dims")(v)
+    q_trans = relax_pattern.is_op("relax.permute_dims")(weight_q)
+    k_trans = relax_pattern.is_op("relax.permute_dims")(weight_k)
+    v_trans = relax_pattern.is_op("relax.permute_dims")(weight_v)
     out = relax_pattern.is_op("relax.nn.attention_bias")(q_trans, k_trans, v_trans, mask)
     annotations = {"q_trans": q_trans, "k_trans": k_trans, "v_trans": v_trans}
     return out, annotations
 
 
-def _check_mask_attention(context: PatternCheckContext) -> bool:
+def _check_relax_mask_attention(context: PatternCheckContext) -> bool:
     """Check if mask_attention pattern is correct."""
     return True
 
@@ -223,47 +224,47 @@ register_patterns(
     [
         (
             "msc.conv1d_bias",
-            *make_conv_bias_pattern(
+            *make_relax_conv_bias_pattern(
                 "relax.nn.conv1d",
             ),
-            _check_conv_bias,
+            _check_relax_conv_bias,
         ),
         (
             "msc.conv2d_bias",
-            *make_conv_bias_pattern(
+            *make_relax_conv_bias_pattern(
                 "relax.nn.conv2d",
             ),
-            _check_conv_bias,
+            _check_relax_conv_bias,
         ),
         (
             "msc.linear",
-            *make_linear_pattern(),
-            _check_linear,
+            *make_relax_linear_pattern(),
+            _check_relax_linear,
         ),
         (
             "msc.linear_bias",
-            *make_linear_bias_pattern(),
-            _check_linear_bias,
+            *make_relax_linear_bias_pattern(),
+            _check_relax_linear_bias,
         ),
         (
             "msc.embedding",
-            *make_embedding_pattern(),
-            _check_embedding,
+            *make_relax_embedding_pattern(),
+            _check_relax_embedding,
         ),
         (
             "msc.embedding",
-            *make_reshape_embedding_pattern(),
-            _check_reshape_embedding,
+            *make_relax_reshape_embedding_pattern(),
+            _check_relax_reshape_embedding,
         ),
         (
             "msc.attention",
-            *make_attention_pattern(),
-            _check_attention,
+            *make_relax_attention_pattern(),
+            _check_relax_attention,
         ),
         (
             "msc.attention",
-            *make_mask_attention_pattern(),
-            _check_mask_attention,
+            *make_relax_mask_attention_pattern(),
+            _check_relax_mask_attention,
         ),
     ]
 )
@@ -275,7 +276,7 @@ def pattern_table():
     """Returns list of triples describing the name, dataflow pattern and predicate for all
     the MSC-supported operators."""
 
-    def make_conv_bias_pattern(op_name, optimized=False):
+    def make_relay_conv_bias_pattern(op_name, optimized=False):
         """A simple utility to create patterns for an operation fused with bias.
 
         Parameters
@@ -301,7 +302,7 @@ def pattern_table():
             out = relay_pattern.is_op("nn.bias_add")(conv, bias)
         return out
 
-    def _check_conv_bias(call: tvm.relay.Expr) -> bool:
+    def _check_relay_conv_bias(call: tvm.relay.Expr) -> bool:
         """Check if conv_bias fuse pattern is correct."""
 
         if call.op.name == "nn.bias_add":
@@ -311,7 +312,7 @@ def pattern_table():
             return True
         return False
 
-    def make_linear_pattern(optimized=False):
+    def make_relay_linear_pattern(optimized=False):
         """A simple utility to create patterns for linear.
 
         Parameters
@@ -344,11 +345,11 @@ def pattern_table():
         reshape_out = relay_pattern.is_op("reshape")(batch_matmul)
         return relay_pattern.is_op("squeeze")(reshape_out)
 
-    def _check_linear(call: tvm.relay.Expr) -> bool:
+    def _check_relay_linear(call: tvm.relay.Expr) -> bool:
         """Check if linear pattern is correct."""
         return True
 
-    def make_linear_bias_pattern(optimized=False):
+    def make_relay_linear_bias_pattern(optimized=False):
         """A simple utility to create patterns for linear_bias.
 
         Parameters
@@ -363,18 +364,18 @@ def pattern_table():
         """
 
         bias = relay_pattern.is_constant()
-        linear = make_linear_pattern(optimized)
+        linear = make_relay_linear_pattern(optimized)
         if optimized:
             out = relay_pattern.is_op("add")(linear, bias)
         else:
             out = relay_pattern.is_op("nn.bias_add")(linear, bias)
         return out
 
-    def _check_linear_bias(call: tvm.relay.Expr) -> bool:
+    def _check_relay_linear_bias(call: tvm.relay.Expr) -> bool:
         """Check if linear_bias pattern is correct."""
         return True
 
-    def make_matmul_pattern(dim=2, optimized=False):
+    def make_relay_matmul_pattern(dim=2, optimized=False):
         """A simple utility to create patterns for matmul.
 
         Parameters
@@ -407,7 +408,7 @@ def pattern_table():
         else:
             raise Exception("matmul pattern only support dim 2 and 3")
 
-    def _check_matmul(call: tvm.relay.Expr) -> bool:
+    def _check_relay_matmul(call: tvm.relay.Expr) -> bool:
         """Check if matmul pattern is correct."""
         last_call = call.args[0] if call.op.name == "squeeze" else call
         if last_call.op.name == "nn.dense":
@@ -418,7 +419,7 @@ def pattern_table():
             return trans_b.attrs["axes"] is None or list(trans_b.attrs["axes"]) == [1, 0]
         return True
 
-    def make_embedding_pattern(optimized=False):
+    def make_relay_embedding_pattern(optimized=False):
         """A simple utility to create patterns for 1d embedding.
 
         Returns
@@ -428,11 +429,11 @@ def pattern_table():
         """
 
         weight = relay_pattern.is_constant()
-        input = relay_pattern.wildcard()
-        astype = relay_pattern.is_op("cast")(input)
+        data = relay_pattern.wildcard()
+        astype = relay_pattern.is_op("cast")(data)
         return relay_pattern.is_op("take")(weight, astype)
 
-    def _check_embedding(call) -> bool:
+    def _check_relay_embedding(call) -> bool:
         """Check if embedding pattern is correct."""
 
         weight = call.args[0]
@@ -443,7 +444,7 @@ def pattern_table():
             and weight.checked_type.dtype == "float32"
         )
 
-    def make_gelu_pattern(optimized=False):
+    def make_relay_gelu_pattern(optimized=False):
         """A simple utility to create patterns for gelu.
 
         Returns
@@ -452,30 +453,38 @@ def pattern_table():
             The resulting pattern describing a gelu operation.
         """
 
-        input = relay_pattern.wildcard()
+        data = relay_pattern.wildcard()
         factor_1 = relay_pattern.is_constant()
-        mul_1 = relay_pattern.is_op("multiply")(input, factor_1)
+        mul_1 = relay_pattern.is_op("multiply")(data, factor_1)
         erf = relay_pattern.is_op("erf")(mul_1)
         factor_2 = relay_pattern.is_constant()
         mul_2 = relay_pattern.is_op("multiply")(erf, factor_2)
         factor_3 = relay_pattern.is_constant()
         add = relay_pattern.is_op("add")(factor_3, mul_2)
-        return relay_pattern.is_op("multiply")(input, add)
+        return relay_pattern.is_op("multiply")(data, add)
 
-    def _check_gelu(call) -> bool:
+    def _check_relay_gelu(call) -> bool:
         """Check if gelu pattern is correct."""
         return True
 
     return [
-        ("msc.conv1d_bias", make_conv_bias_pattern("nn.conv1d"), _check_conv_bias),
-        ("msc.conv1d_bias", make_conv_bias_pattern("nn.conv1d", True), _check_conv_bias),
-        ("msc.conv2d_bias", make_conv_bias_pattern("nn.conv2d"), _check_conv_bias),
-        ("msc.conv2d_bias", make_conv_bias_pattern("nn.conv2d", True), _check_conv_bias),
-        ("msc.linear_bias", make_linear_bias_pattern(), _check_linear_bias),
-        ("msc.linear", make_linear_pattern(), _check_linear),
-        ("msc.linear", make_linear_pattern(True), _check_linear),
-        ("msc.matmul", make_matmul_pattern(dim=2), _check_matmul),
-        ("msc.matmul", make_matmul_pattern(dim=3), _check_matmul),
-        ("msc.embedding", make_embedding_pattern(), _check_embedding),
-        ("msc.gelu", make_gelu_pattern(), _check_gelu),
+        ("msc.conv1d_bias", make_relay_conv_bias_pattern("nn.conv1d"), _check_relay_conv_bias),
+        (
+            "msc.conv1d_bias",
+            make_relay_conv_bias_pattern("nn.conv1d", True),
+            _check_relay_conv_bias,
+        ),
+        ("msc.conv2d_bias", make_relay_conv_bias_pattern("nn.conv2d"), _check_relay_conv_bias),
+        (
+            "msc.conv2d_bias",
+            make_relay_conv_bias_pattern("nn.conv2d", True),
+            _check_relay_conv_bias,
+        ),
+        ("msc.linear_bias", make_relay_linear_bias_pattern(), _check_relay_linear_bias),
+        ("msc.linear", make_relay_linear_pattern(), _check_relay_linear),
+        ("msc.linear", make_relay_linear_pattern(True), _check_relay_linear),
+        ("msc.matmul", make_relay_matmul_pattern(dim=2), _check_relay_matmul),
+        ("msc.matmul", make_relay_matmul_pattern(dim=3), _check_relay_matmul),
+        ("msc.embedding", make_relay_embedding_pattern(), _check_relay_embedding),
+        ("msc.gelu", make_relay_gelu_pattern(), _check_relay_gelu),
     ]

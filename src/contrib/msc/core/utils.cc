@@ -20,8 +20,10 @@
 /*!
  * \file src/contrib/msc/core/utils.cc
  */
+
 #include "utils.h"
 
+#include <string>
 namespace tvm {
 namespace contrib {
 namespace msc {

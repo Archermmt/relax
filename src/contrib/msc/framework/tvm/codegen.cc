@@ -26,12 +26,12 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
-void RelaxGraphCodeGen::CodeGenHeader() {
-  PyGraphCodeGen<RelaxCodeDenConfig>::CodeGenHeader();
+void RelaxCodeGen::CodeGenHeader() {
+  PyCodeGen<RelaxCodeGenConfig>::CodeGenHeader();
   stack_.line("from tvm import relax");
 }
 
-void RelaxGraphCodeGen::CodeGenGraph() {
+void RelaxCodeGen::CodeGenGraph() {
   stack_.func_def(graph()->name, "tvm.IRModule");
   Array<String> idx_inputs;
   for (const auto& i : graph()->GetInputs()) {
@@ -105,7 +105,7 @@ void RelaxGraphCodeGen::CodeGenGraph() {
   stack_.call_end().scope_end().assign("mod", "block_builder.get()").func_end("mod");
 }
 
-void RelaxGraphCodeGen::CodeGenInference() {
+void RelaxCodeGen::CodeGenInference() {
   for (const auto& i : graph()->GetInputs()) {
     const auto& pair = graph()->FindProducerAndIdx(i);
     stack_.call_start("relax.Var")
@@ -161,8 +161,8 @@ void RelaxGraphCodeGen::CodeGenInference() {
   stack_.call_end("outputs");
 }
 
-const Array<Doc> RelaxGraphCodeGen::GetOpCodes(const MSCJoint& node) {
-  const auto& ops_map = GetRelaxOpCodeGens();
+const Array<Doc> RelaxCodeGen::GetOpCodes(const MSCJoint& node) {
+  const auto& ops_map = GetRelaxOpCodes();
   auto it = ops_map->find(node->optype);
   ICHECK(it != ops_map->end()) << "Unsupported relax op(" << node->optype << "): " << node;
   it->second->Config(node, config());
@@ -177,7 +177,7 @@ const Array<Doc> RelaxGraphCodeGen::GetOpCodes(const MSCJoint& node) {
 TVM_REGISTER_GLOBAL("msc.framework.tvm.GetRelaxSources")
     .set_body_typed([](const MSCGraph& graph, const String& codegen_config,
                        const String print_config) -> Map<String, String> {
-      RelaxGraphCodeGen codegen = RelaxGraphCodeGen(graph, codegen_config);
+      RelaxCodeGen codegen = RelaxCodeGen(graph, codegen_config);
       return codegen.GetSources(print_config);
     });
 

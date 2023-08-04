@@ -21,8 +21,10 @@
  * \file src/contrib/msc/framework/tvm/codegen.h
  * \brief Relax codegen for MSCGraph.
  */
-#ifndef TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_
-#define TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_
+#ifndef TVM_CONTRIB_MSCFramework_TVM_CODEGEN_H_
+#define TVM_CONTRIB_MSCFramework_TVM_CODEGEN_H_
+
+#include <string>
 
 #include "../../core/codegen/base_codegen.h"
 #include "../../core/codegen/py_codegen.h"
@@ -33,15 +35,15 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
-class RelaxGraphCodeGen : public PyGraphCodeGen<RelaxCodeDenConfig> {
+class RelaxCodeGen : public PyCodeGen<RelaxCodeGenConfig> {
  public:
   /*!
-   * \brief The constructor of RelaxGraphCodeGen
+   * \brief The constructor of RelaxCodeGen
    * \param graph the graph to be generated.
    * \param config the options for codegen.
    */
-  explicit RelaxGraphCodeGen(const MSCGraph& graph, const std::string& config = "")
-      : PyGraphCodeGen<RelaxCodeDenConfig>(graph, config) {}
+  explicit RelaxCodeGen(const MSCGraph& graph, const std::string& config = "")
+      : PyCodeGen<RelaxCodeGenConfig>(graph, config) {}
 
  protected:
   /*! \brief Stack the docs for the header*/
@@ -66,4 +68,4 @@ class RelaxGraphCodeGen : public PyGraphCodeGen<RelaxCodeDenConfig> {
 }  // namespace contrib
 }  // namespace tvm
 
-#endif  // TVM_CONTRIB_MSC_FRAMEWORK_TVM_CODEGEN_H_
+#endif  // TVM_CONTRIB_MSCFramework_TVM_CODEGEN_H_

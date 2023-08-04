@@ -23,6 +23,9 @@
 
 #include "prototxt_printer.h"
 
+#include <utility>
+#include <vector>
+
 namespace tvm {
 namespace contrib {
 namespace msc {

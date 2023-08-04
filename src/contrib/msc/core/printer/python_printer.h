@@ -25,6 +25,7 @@
 #ifndef TVM_CONTRIB_MSC_CORE_PRINTER_PYTHON_PRINTER_H_
 #define TVM_CONTRIB_MSC_CORE_PRINTER_PYTHON_PRINTER_H_
 
+#include <string>
 #include "msc_base_printer.h"
 
 namespace tvm {

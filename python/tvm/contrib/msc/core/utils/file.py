@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils.file_utils"""
+"""tvm.contrib.msc.core.utils.file"""
 
 import os
 import shutil
@@ -23,7 +23,7 @@ import types
 from typing import List
 from importlib.machinery import SourceFileLoader
 
-from .namespace import *
+from .namespace import MSCFramework
 from .register import get_registered_func
 
 
@@ -46,7 +46,7 @@ class MSCDirectory(object):
         os.chdir(self._path)
         return self
 
-    def __exit__(self, exc, value, tb):
+    def __exit__(self, exception_type, exception_value, traceback):
         os.chdir(self._cwd)
         self.clean_up()
 
@@ -131,7 +131,7 @@ def msc_dir(path: str = None, keep_history: bool = True, cleanup: bool = False) 
     return MSCDirectory(path, keep_history, cleanup)
 
 
-def load_callable(name: str, framework: str = MSC_FRAMEWORK.MSC) -> callable:
+def load_callable(name: str, framework: str = MSCFramework.MSC) -> callable:
     """Load a callable  object.
 
     Parameters
@@ -139,7 +139,7 @@ def load_callable(name: str, framework: str = MSC_FRAMEWORK.MSC) -> callable:
     name: string
         The name of the registered func or path:f_name str.
     framework: string
-        Should be from MSC_FRAMEWORK.
+        Should be from MSCFramework.
 
     Returns
     -------

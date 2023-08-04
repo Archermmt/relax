@@ -23,6 +23,8 @@
 
 #include "graph.h"
 
+#include <set>
+
 #include "../printer/prototxt_printer.h"
 
 namespace tvm {

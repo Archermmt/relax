@@ -22,6 +22,9 @@
  */
 #include "layout_utils.h"
 
+#include <set>
+#include <string>
+
 namespace tvm {
 namespace contrib {
 namespace msc {

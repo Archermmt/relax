@@ -26,6 +26,9 @@
 
 #include <tvm/script/printer/doc.h>
 
+#include <memory>
+#include <string>
+
 #include "../ir/graph.h"
 #include "../utils.h"
 
@@ -86,19 +89,19 @@ using namespace tvm::script::printer;
   const String GetSuffix(bool as_raw = false) {                                                    \
     const String& suffix = as_raw && config()->need_process ? "_raw" : "";                         \
     return suffix;                                                                                 \
-  };                                                                                               \
+  }                                                                                                \
   virtual const String IdxNode(const MSCJoint& node, bool as_raw = true) {                         \
     return CodeGenUtils::IdxNode(node, config()->prefix, GetSuffix(as_raw));                       \
-  };                                                                                               \
+  }                                                                                                \
   virtual const String IdxInput(const MSCJoint& node, int idx = 0, bool as_raw = false) {          \
     return CodeGenUtils::IdxInput(node, config()->prefix, idx, GetSuffix(as_raw));                 \
-  };                                                                                               \
+  }                                                                                                \
   virtual const String IdxOutput(const MSCJoint& node, int idx = 0, bool as_raw = false) {         \
     return CodeGenUtils::IdxOutput(node, config()->prefix, idx, GetSuffix(as_raw));                \
-  };                                                                                               \
+  }                                                                                                \
   virtual const String IdxWeight(const MSCJoint& node, const String& wtype, bool as_raw = false) { \
     return CodeGenUtils::IdxWeight(node, wtype, GetSuffix(as_raw));                                \
-  };                                                                                               \
+  }                                                                                                \
   virtual const String DType(const DataType& dtype) { return runtime::DLDataType2String(dtype); }  \
   virtual const String Comment(const MSCJoint& node) {                                             \
     return CodeGenUtils::CommentNode(node, config()->prefix);                                      \
@@ -145,18 +148,6 @@ class CodeGenUtils {
    * \return The String.
    */
   TVM_DLL static const String CommentNode(const MSCJoint& node, const String& prefix);
-
-  /*!
-   * \brief Convert the docs to Stmts.
-   * \return The Stmts.
-   */
-  TVM_DLL static const Array<StmtDoc> ToStmts(const Array<Doc>& docs);
-
-  /*!
-   * \brief Convert the docs to StmtBlock.
-   * \return The StmtBlockDoc.
-   */
-  TVM_DLL static const StmtBlockDoc ToStmtBlock(const Array<Doc>& docs);
 };
 
 }  // namespace msc

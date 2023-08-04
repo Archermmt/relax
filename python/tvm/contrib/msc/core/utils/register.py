@@ -16,10 +16,10 @@
 # under the License.
 """tvm.contrib.msc.core.utils.register"""
 
-from .namespace import *
+from .namespace import MSCMap, MSCKey, MSCFramework
 
 
-def register_func(name: str, func: callable, framework: str = MSC_FRAMEWORK.MSC):
+def register_func(name: str, func: callable, framework: str = MSCFramework.MSC):
     """Register a func for framework.
 
     Parameters
@@ -29,17 +29,17 @@ def register_func(name: str, func: callable, framework: str = MSC_FRAMEWORK.MSC)
     func: callable
         The function to be registered.
     framework: string
-        Should be from MSC_FRAMEWORK.
+        Should be from MSCFramework.
     """
 
-    funcs = MSC_MAP.get(MSC_KEY.REGISTERED_FUNCS, {})
+    funcs = MSCMap.get(MSCKey.REGISTERED_FUNCS, {})
     if framework not in funcs:
         funcs[framework] = {}
     funcs[framework][name] = func
-    MSC_MAP.set(MSC_KEY.REGISTERED_FUNCS, funcs)
+    MSCMap.set(MSCKey.REGISTERED_FUNCS, funcs)
 
 
-def get_registered_func(name: str, framework: str = MSC_FRAMEWORK.MSC):
+def get_registered_func(name: str, framework: str = MSCFramework.MSC):
     """Get the registered func of framework.
 
     Parameters
@@ -47,7 +47,7 @@ def get_registered_func(name: str, framework: str = MSC_FRAMEWORK.MSC):
     name: string
         The name for the func.
     framework: string
-        Should be from MSC_FRAMEWORK.
+        Should be from MSCFramework.
 
     Returns
     -------
@@ -55,7 +55,7 @@ def get_registered_func(name: str, framework: str = MSC_FRAMEWORK.MSC):
         The registered function.
     """
 
-    funcs = MSC_MAP.get(MSC_KEY.REGISTERED_FUNCS, {})
+    funcs = MSCMap.get(MSCKey.REGISTERED_FUNCS, {})
     if framework not in funcs:
         return None
     return funcs[framework].get(name)

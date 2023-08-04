@@ -27,6 +27,8 @@
 #include <tvm/ir/source_map.h>
 #include <tvm/relax/expr.h>
 
+#include <vector>
+
 #include "../../../../relax/transform/infer_layout_utils.h"
 #include "../../../../relax/transform/utils.h"
 #include "../utils.h"

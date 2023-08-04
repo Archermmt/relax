@@ -59,7 +59,7 @@ std::tuple<int64_t, int64_t> AccumulateMatch(const std::vector<int64_t>& in_shap
                                              const std::vector<int64_t>& out_shape, size_t in_start,
                                              size_t out_start) {
   // find input position in_pos and output position out_pos
-  // mul(in_shape[in_start:in_ops])==mul(out_shape[out_start:out_pos])
+  // cumsum(in_shape[in_start:in_ops])==cumsum(out_shape[out_start:out_pos])
   int64_t in_pos = -1;
   int64_t out_pos = -1;
   int64_t in_accumulate = 1;
@@ -1086,7 +1086,6 @@ class LayoutInfer : public ExprVisitor {
             infered_layout = f(call, Map<String, Array<String>>(), var_layout_map_);
             set_inputs = false;
           }
-
         } catch (runtime::InternalError& err) {
           LOG(WARNING) << "Failed to forward infer layout for " << binding->var << " : "
                        << binding->value << ", reason: " << err.message();

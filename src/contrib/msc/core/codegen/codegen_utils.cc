@@ -30,7 +30,7 @@ namespace msc {
 const String CodeGenUtils::IdxNode(const MSCJoint& node, const String& prefix,
                                    const String& suffix) {
   return prefix + std::to_string(node->index) + suffix;
-};
+}
 
 const String CodeGenUtils::IdxOutput(const MSCJoint& node, const String& prefix, int idx,
                                      const String& suffix) {
@@ -41,18 +41,18 @@ const String CodeGenUtils::IdxOutput(const MSCJoint& node, const String& prefix,
   }
   size_t v_index = CommonUtils::GetIndex(idx, output_size);
   return idx_node + "[" + std::to_string(v_index) + "]";
-};
+}
 
 const String CodeGenUtils::IdxInput(const MSCJoint& node, const String& prefix, int idx,
                                     const String& suffix) {
   const auto& pair = node->ProducerAndIdxOf(idx);
   return IdxOutput(pair.first, prefix, pair.second, suffix);
-};
+}
 
 const String CodeGenUtils::IdxWeight(const MSCJoint& node, const String& wtype,
                                      const String& suffix) {
   return wtype + std::to_string(node->index) + suffix;
-};
+}
 
 const String CodeGenUtils::CommentNode(const MSCJoint& node, const String& prefix) {
   String comment = node->name + "(" + node->optype + "): <";
@@ -63,24 +63,6 @@ const String CodeGenUtils::CommentNode(const MSCJoint& node, const String& prefi
     comment = comment + IdxOutput(node, prefix, i) + (i == node->outputs.size() - 1 ? ">" : ",");
   }
   return comment;
-}
-
-const Array<StmtDoc> CodeGenUtils::ToStmts(const Array<Doc>& docs) {
-  Array<StmtDoc> stmts;
-  for (const auto& d : docs) {
-    if (d->IsInstance<StmtDocNode>()) {
-      stmts.push_back(Downcast<StmtDoc>(d));
-    } else if (d->IsInstance<ExprDocNode>()) {
-      stmts.push_back(ExprStmtDoc(Downcast<ExprDoc>(d)));
-    } else {
-      LOG(FATAL) << "Unecpected doc type " << d->GetTypeKey();
-    }
-  }
-  return stmts;
-}
-
-const StmtBlockDoc CodeGenUtils::ToStmtBlock(const Array<Doc>& docs) {
-  return StmtBlockDoc(ToStmts(docs));
 }
 
 }  // namespace msc

@@ -21,8 +21,13 @@
  * \file src/contrib/msc/framework/tvm/relax_opcode.h
  * \brief Relax codegen for MSCJoint.
  */
-#ifndef TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_OPCODE_H_
-#define TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_OPCODE_H_
+#ifndef TVM_CONTRIB_MSCFramework_TVM_RELAX_OPCODE_H_
+#define TVM_CONTRIB_MSCFramework_TVM_RELAX_OPCODE_H_
+
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "../../core/codegen/base_codegen.h"
 #include "config.h"
@@ -31,46 +36,47 @@ namespace tvm {
 namespace contrib {
 namespace msc {
 
-class RelaxOpCodeGen;
-typedef OpCodeStack<RelaxOpCodeGen> RelaxOpCodeStack;
+class RelaxOpCode;
+typedef OpCodeStack<RelaxOpCode> RelaxOpCodeStack;
 
 /*!
  * \brief CodeGen for relax op
  */
-class RelaxOpCodeGen : public BaseOpCodeGen<RelaxCodeDenConfig> {
+class RelaxOpCode : public BaseOpCode<RelaxCodeGenConfig> {
  public:
   /*!
    * \brief The constructor of BaseOpDocsifier
    * \param func_name the function name for the node.
    * \param config the config json for the node.
    */
-  explicit RelaxOpCodeGen(const String& func_name) : BaseOpCodeGen<RelaxCodeDenConfig>(func_name) {}
+  explicit RelaxOpCode(const String& func_name) : BaseOpCode<RelaxCodeGenConfig>(func_name) {}
 
   /*! \brief Convert node to docs*/
   const Array<Doc> GetDocs() final;
 
  protected:
   /*! \brief Convert op build*/
-  virtual void CodeGenBuild(RelaxOpCodeStack& stack) = 0;
+  virtual void CodeGenBuild() = 0;
 
   /*! \brief coda stack emit docs*/
-  void BuilderEmit(RelaxOpCodeStack& stack, const String& ret, const String& name = "");
+  void BuilderEmit(const String& ret, const String& name = "");
 
   /*! \brief Get the out_dtype attribute*/
   const std::string GetOutDtype(const String& key = "out_dtype");
 
   /*! \brief Get the axes attribute*/
   const std::vector<int> GetAxes(const String& key = "axes");
+
+  RelaxOpCodeStack stack_;
 };
 
 /*!
- * \brief Get the map of available RelaxOpCodeGen, use optype as key
- * \return Map of <string, RelaxOpCodeGen>
+ * \brief Get the map of available RelaxOpCode, use optype as key
+ * \return Map of <string, RelaxOpCode>
  */
-const std::shared_ptr<std::unordered_map<String, std::shared_ptr<RelaxOpCodeGen>>>
-GetRelaxOpCodeGens();
+const std::shared_ptr<std::unordered_map<String, std::shared_ptr<RelaxOpCode>>> GetRelaxOpCodes();
 
 }  // namespace msc
 }  // namespace contrib
 }  // namespace tvm
-#endif  // TVM_CONTRIB_MSC_FRAMEWORK_TVM_RELAX_OPCODE_H_
+#endif  // TVM_CONTRIB_MSCFramework_TVM_RELAX_OPCODE_H_

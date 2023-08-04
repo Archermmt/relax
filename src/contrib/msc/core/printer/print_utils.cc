@@ -22,6 +22,8 @@
  */
 #include "print_utils.h"
 
+#include <string>
+
 namespace tvm {
 namespace contrib {
 namespace msc {
@@ -49,6 +51,24 @@ const ExprDoc DocUtils::ToDoc(const String& val) { return IdDoc(val); }
 const ExprDoc DocUtils::ToDoc(bool val) { return LiteralDoc::Boolean(val, NullOpt); }
 
 const ExprDoc DocUtils::ToStrDoc(const String& val) { return LiteralDoc::Str(val, NullOpt); }
+
+const Array<StmtDoc> DocUtils::ToStmts(const Array<Doc>& docs) {
+  Array<StmtDoc> stmts;
+  for (const auto& d : docs) {
+    if (d->IsInstance<StmtDocNode>()) {
+      stmts.push_back(Downcast<StmtDoc>(d));
+    } else if (d->IsInstance<ExprDocNode>()) {
+      stmts.push_back(ExprStmtDoc(Downcast<ExprDoc>(d)));
+    } else {
+      LOG(FATAL) << "Unecpected doc type " << d->GetTypeKey();
+    }
+  }
+  return stmts;
+}
+
+const StmtBlockDoc DocUtils::ToStmtBlock(const Array<Doc>& docs) {
+  return StmtBlockDoc(ToStmts(docs));
+}
 
 }  // namespace msc
 }  // namespace contrib

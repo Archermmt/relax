@@ -16,8 +16,8 @@
 # under the License.
 """tvm.contrib.msc.core.utils"""
 
-from .info_utils import *
-from .expr_utils import *
-from .file_utils import *
+from .expr import *
+from .info import *
+from .file import *
 from .namespace import *
 from .register import *

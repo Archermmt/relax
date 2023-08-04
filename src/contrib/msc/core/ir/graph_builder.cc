@@ -213,12 +213,8 @@ const MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>
   const auto& sinfo = relax::GetStructInfo(expr);
   if (const auto* t_info = sinfo.as<relax::TensorStructInfoNode>()) {
     const auto& opt_shape = t_info->GetShape();
-    Array<Integer> shape;
-    if (opt_shape.defined()) {
-      for (const auto& s : opt_shape.value()) {
-        shape.push_back(Downcast<Integer>(s));
-      }
-    }
+    const auto& shape =
+        opt_shape.defined() ? ArrayUtils::Cast<Integer>(opt_shape.value()) : Array<Integer>();
     const auto& output =
         MSCTensor(node_name + ":" + std::to_string(0), t_info->dtype, layout, shape);
     outputs.push_back(output);
@@ -241,12 +237,8 @@ const MSCJoint RelaxGraphBuilder::AddNode(const Expr& expr, const Optional<Expr>
     for (size_t i = 0; i < field_size; i++) {
       const auto& t_info = Downcast<relax::TensorStructInfo>(tuple_sinfo->fields[i]);
       const auto& opt_shape = t_info->GetShape();
-      Array<Integer> shape;
-      if (opt_shape.defined()) {
-        for (const auto& s : opt_shape.value()) {
-          shape.push_back(Downcast<Integer>(s));
-        }
-      }
+      const auto& shape =
+          opt_shape.defined() ? ArrayUtils::Cast<Integer>(opt_shape.value()) : Array<Integer>();
       const auto& output =
           MSCTensor(node_name + ":" + std::to_string(i), t_info->dtype, layouts[i], shape);
       outputs.push_back(output);
@@ -340,12 +332,8 @@ void RelaxWeightsExtractor::VisitExpr_(const relax::ConstantNode* op) {
       << "Constant StrcutInfo should be TensorStructInfo";
   const auto& t_info = Downcast<relax::TensorStructInfo>(sinfo);
   const auto& opt_shape = t_info->GetShape();
-  Array<Integer> shape;
-  if (opt_shape.defined()) {
-    for (const auto& s : opt_shape.value()) {
-      shape.push_back(Downcast<Integer>(s));
-    }
-  }
+  const auto& shape =
+      opt_shape.defined() ? ArrayUtils::Cast<Integer>(opt_shape.value()) : Array<Integer>();
   const auto& weight = MSCTensor(name, t_info->dtype, layout, shape);
   weights_.Set(weight, op->data);
 }
@@ -531,15 +519,12 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
   Array<MSCTensor> outputs;
   const auto& layout = SpanUtils::GetAttr(expr->span, "layout");
   Type checked_type = expr->checked_type_;
-  if (checked_type.defined() and checked_type.as<relay::FuncTypeNode>()) {
+  if (checked_type.defined() && checked_type.as<relay::FuncTypeNode>()) {
     checked_type = Downcast<FuncType>(checked_type)->ret_type;
   }
   if (checked_type.defined()) {
     if (const auto* t_info = checked_type.as<relay::TensorTypeNode>()) {
-      Array<Integer> shape;
-      for (const auto& s : t_info->shape) {
-        shape.push_back(Downcast<Integer>(s));
-      }
+      const auto& shape = ArrayUtils::Cast<Integer>(t_info->shape);
       const auto& output =
           MSCTensor(node_name + ":" + std::to_string(0), t_info->dtype, layout, shape);
       outputs.push_back(output);
@@ -556,10 +541,7 @@ MSCJoint RelayGraphBuilder::AddNode(const Expr& expr, const String& name) {
       }
       for (size_t i = 0; i < field_size; i++) {
         const auto& t_info = Downcast<relay::TensorType>(tuple_info->fields[i]);
-        Array<Integer> shape;
-        for (const auto& s : t_info->shape) {
-          shape.push_back(Downcast<Integer>(s));
-        }
+        const auto& shape = ArrayUtils::Cast<Integer>(t_info->shape);
         const auto& output =
             MSCTensor(node_name + ":" + std::to_string(i), t_info->dtype, layouts[i], shape);
         outputs.push_back(output);
@@ -657,10 +639,7 @@ void RelayWeightsExtractor::VisitExpr_(const relay::ConstantNode* op) {
   const auto& name = SpanUtils::GetAttr(op->span, "name");
   const auto& layout = SpanUtils::GetAttr(op->span, "layout");
   const auto& t_info = op->tensor_type();
-  Array<Integer> shape;
-  for (const auto& s : t_info->shape) {
-    shape.push_back(Downcast<Integer>(s));
-  };
+  const auto& shape = ArrayUtils::Cast<Integer>(t_info->shape);
   const auto& weight = MSCTensor(name, t_info->dtype, layout, shape);
   weights_.Set(weight, op->data);
 }

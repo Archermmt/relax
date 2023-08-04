@@ -36,7 +36,9 @@ using namespace tvm::contrib::msc;
 
 namespace relax {
 
-// Relax name setter
+/*!
+ * \brief Name setter for Relax
+ */
 class RelaxExprNameSetter : public ExprVisitor {
  public:
   explicit RelaxExprNameSetter(const IRModule& ref_module) : ref_module_(ref_module) {}
@@ -205,9 +207,11 @@ TVM_REGISTER_GLOBAL("relax.transform.SetRelaxExprName").set_body_typed(SetRelaxE
 }  // namespace transform
 }  // namespace relax
 
-// Relay name setter
 namespace relay {
 
+/*!
+ * \brief Name setter for Relay
+ */
 class RelayExprNameSetter : public ExprVisitor {
  public:
   explicit RelayExprNameSetter(const IRModule& ref_module) : ref_module_(ref_module) {}

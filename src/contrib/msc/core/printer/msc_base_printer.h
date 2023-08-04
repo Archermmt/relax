@@ -27,6 +27,8 @@
 #include <dmlc/json.h>
 #include <tvm/script/printer/doc.h>
 
+#include <string>
+
 #include "../../../../../src/support/str_escape.h"
 
 namespace tvm {

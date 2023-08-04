@@ -26,6 +26,10 @@
 
 #include <tvm/script/printer/doc.h>
 
+#include <stack>
+#include <string>
+#include <vector>
+
 #include "../printer/print_utils.h"
 #include "codegen_utils.h"
 
@@ -43,7 +47,10 @@ class BaseStack {
   /*!
    * \brief The constructor of CodeStack
    */
-  explicit BaseStack() {
+  BaseStack() { Reset(); }
+
+  /*! \brief Cleanup blocks*/
+  void Reset() {
     while (!blocks_.empty()) {
       blocks_.pop();
     }
@@ -171,7 +178,7 @@ class BaseStack {
   void ScopeEnd();
 
  private:
-  /*! \brief Check if block left*/
+  /*! \brief Check if has block left*/
   bool HasBlock() const;
 
   /*! \brief Get the last the block*/
@@ -338,7 +345,7 @@ class CodeStack : public BaseStack {
   /*!
    * \brief The constructor of CodeStack
    */
-  explicit CodeStack() : BaseStack() {}
+  CodeStack() : BaseStack() {}
 
   COMMON_WRAPPERS(CodeStack)
 };
@@ -351,9 +358,16 @@ class OpCodeStack : public BaseStack {
  public:
   /*!
    * \brief The constructor of OpCodeStack
-   * \param codegen the OpCodeGen pointer.
    */
-  explicit OpCodeStack(OpCodeGenType* codegen) : BaseStack() { codegen_ = codegen; }
+  OpCodeStack() : BaseStack() {}
+
+  /*! \brief Set codegen*/
+  void Config(OpCodeGenType* codegen, bool reset = true) {
+    codegen_ = codegen;
+    if (reset) {
+      Reset();
+    }
+  }
 
   COMMON_WRAPPERS(OpCodeStack<OpCodeGenType>)
 

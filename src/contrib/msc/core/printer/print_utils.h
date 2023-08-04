@@ -26,6 +26,8 @@
 
 #include <tvm/script/printer/doc.h>
 
+#include <vector>
+
 namespace tvm {
 namespace contrib {
 namespace msc {
@@ -73,6 +75,18 @@ class DocUtils {
     }
     return ListDoc(elements);
   }
+
+  /*!
+   * \brief Convert the docs to Stmts.
+   * \return The Stmts.
+   */
+  TVM_DLL static const Array<StmtDoc> ToStmts(const Array<Doc>& docs);
+
+  /*!
+   * \brief Convert the docs to StmtBlock.
+   * \return The StmtBlockDoc.
+   */
+  TVM_DLL static const StmtBlockDoc ToStmtBlock(const Array<Doc>& docs);
 };
 
 }  // namespace msc

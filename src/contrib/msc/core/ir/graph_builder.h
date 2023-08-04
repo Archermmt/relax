@@ -32,6 +32,12 @@
 #include <tvm/runtime/ndarray.h>
 #include <tvm/tir/data_layout.h>
 
+#include <stack>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "../utils.h"
 #include "graph.h"
 
@@ -88,8 +94,7 @@ class AttrGetter : public AttrVisitor {
  public:
   /*!
    * \brief Get the attributes as Map<String, String>
-   * \param keys the keys.
-   * \param values the values.
+   * \param attrs the attributes.
    */
   explicit AttrGetter(Map<String, String>* attrs) : attrs_(attrs) {}
 
@@ -127,6 +132,7 @@ class AttrGetter : public AttrVisitor {
 
 class RelaxFuncAttrGetter : public RelaxExprVisitor {
  public:
+  /*! \brief Get the attributes as Map<String, String>*/
   Map<String, String> GetAttrs(const Expr& expr) {
     RelaxExprVisitor::VisitExpr(expr);
     return attrs_;
@@ -142,6 +148,7 @@ class RelaxGraphBuilder : public RelaxExprVisitor {
  public:
   /*!
    * \brief The constructor of RelaxGraphBuilder
+   * \param ref_module the reference module.
    * \param name the name of the graph.
    * \param options the options of build the graph.
    */
@@ -157,8 +164,10 @@ class RelaxGraphBuilder : public RelaxExprVisitor {
     }
   }
 
+  /*! \brief Build MSCGraph from relax function*/
   const MSCGraph Build(const relax::Function& func);
 
+  /*! \brief Create and add MSCJoint from expr*/
   const MSCJoint AddNode(const Expr& expr, const Optional<Expr>& binding_var = NullOpt,
                          const String& name = "");
 
@@ -194,9 +203,7 @@ class RelaxGraphBuilder : public RelaxExprVisitor {
 
 class RelaxWeightsExtractor : public RelaxExprVisitor {
  public:
-  /*!
-   * \brief Visit the constant and save weights
-   */
+  /*! \brief Visit the constant and save weights */
   Map<MSCTensor, NDArray> GetWeights(const relax::Function& func);
 
   void VisitExpr_(const relax::ConstantNode* op) final;
@@ -207,6 +214,7 @@ class RelaxWeightsExtractor : public RelaxExprVisitor {
 
 class RelayFuncAttrGetter : public RelayExprVisitor {
  public:
+  /*! \brief Get the attributes as Map<String, String>*/
   Map<String, String> GetAttrs(const Expr& expr) {
     RelayFuncAttrGetter::VisitExpr(expr);
     return attrs_;
@@ -224,16 +232,16 @@ class RelayFuncAttrGetter : public RelayExprVisitor {
 class RelayFuncScope {
  public:
   /*! \brief The constructor */
-  RelayFuncScope(const String& name) : name_(name) {}
+  explicit RelayFuncScope(const String& name) : name_(name) {}
+
   /*! \brief Add a weight */
   void AddFuncWeight(const String& weight) { func_weights_.push_back(weight); }
+
   /*! \brief Get weights */
   const Array<String> GetFuncWeights() { return func_weights_; }
 
  private:
-  /*! \brief The scope name, thus func name */
   String name_;
-  /*! \brief The constants in the scope */
   Array<String> func_weights_;
 };
 
@@ -241,6 +249,7 @@ class RelayGraphBuilder : public RelayExprVisitor {
  public:
   /*!
    * \brief The constructor of RelayGraphBuilder
+   * \param ref_module the reference module.
    * \param name the name of the graph.
    * \param options the options of build the graph.
    */
@@ -259,8 +268,10 @@ class RelayGraphBuilder : public RelayExprVisitor {
     }
   }
 
+  /*! \brief Build MSCGraph from relax function*/
   MSCGraph Build(const relay::Function& func);
 
+  /*! \brief Create and add MSCJoint from expr*/
   MSCJoint AddNode(const Expr& expr, const String& name = "");
 
   void VisitExpr_(const relay::ConstantNode* op) final;
@@ -276,8 +287,10 @@ class RelayGraphBuilder : public RelayExprVisitor {
  protected:
   /*! \brief Start a func scope */
   void StartFuncScope(const String& scope);
+
   /*! \brief End a func scope */
   void EndFuncScope();
+
   /*! \brief Check if has func scopes left */
   bool HasFuncScope();
 
@@ -294,9 +307,7 @@ class RelayGraphBuilder : public RelayExprVisitor {
 
 class RelayWeightsExtractor : public RelayExprVisitor {
  public:
-  /*!
-   * \brief Visit the constant and save weights
-   */
+  /*! \brief Visit the constant and save weights*/
   Map<MSCTensor, NDArray> GetWeights(const relay::Function& func);
 
   void VisitExpr_(const relay::ConstantNode* op) final;

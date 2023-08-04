@@ -25,6 +25,10 @@
 #ifndef TVM_CONTRIB_MSC_CORE_PRINTER_PROTOTXT_PRINTER_H_
 #define TVM_CONTRIB_MSC_CORE_PRINTER_PROTOTXT_PRINTER_H_
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "msc_base_printer.h"
 
 namespace tvm {
@@ -45,37 +49,22 @@ class PrototxtPrinter : public MSCBasePrinter {
    */
   explicit PrototxtPrinter(const std::string& options = "") : MSCBasePrinter(options) {}
 
-  /*!
-   * \brief Change object to LiteralDoc
-   * \param obj the object.
-   */
+  /*! \brief Change object to LiteralDoc*/
   static LiteralDoc ToLiteralDoc(const ObjectRef& obj);
 
-  /*!
-   * \brief Change map to DictDoc
-   * \param dict the dict in map format.
-   */
+  /*! \brief Change map to DictDoc*/
   static DictDoc ToDictDoc(const Map<String, ObjectRef>& dict);
 
-  /*!
-   * \brief Change ordered pairs to DictDoc
-   * \param dict the ordered pairs.
-   */
+  /*! \brief Change ordered pairs to DictDoc*/
   static DictDoc ToDictDoc(const std::vector<std::pair<String, ObjectRef>>& dict);
 
-  /*!
-   * \brief Append a map into the final content
-   */
+  /*! \brief Append a map into the final content*/
   void Append(const Map<String, ObjectRef>& dict);
 
-  /*!
-   * \brief Append ordered pairs into the final content
-   */
+  /*! \brief Append ordered pairs into the final content*/
   void Append(const std::vector<std::pair<String, ObjectRef>>& dict);
 
-  /*!
-   * \brief Append a map pair into the final content
-   */
+  /*! \brief Append a map pair into the final content*/
   void AppendPair(const String& key, const ObjectRef& value);
 
  protected:

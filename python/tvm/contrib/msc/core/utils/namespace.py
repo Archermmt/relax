@@ -19,7 +19,7 @@
 import copy
 
 
-class MSC_MAP:
+class MSCMap:
     """Global Namespace map for MSC"""
 
     MAP = {}
@@ -47,8 +47,8 @@ class MSC_MAP:
         return key in cls.MAP
 
 
-class MSC_KEY:
-    """Keys for the MSC_MAP"""
+class MSCKey:
+    """Keys for the MSCMap"""
 
     WORKSPACE = "workspace"
     VERBOSE = "verbose"
@@ -56,7 +56,7 @@ class MSC_KEY:
     REGISTERED_TOOLS = "registered_tools"
 
 
-class MSC_FRAMEWORK:
+class MSCFramework:
     """Framework type for the MSC"""
 
     MSC = "msc"

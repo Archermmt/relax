@@ -44,7 +44,7 @@ def to_relax(
         The config for codegen.
     print_config: dict
         The config for print.
-    build_folder: str
+    build_folder: MSCDirectory
         The folder for saving scripts and datas.
 
     Returns

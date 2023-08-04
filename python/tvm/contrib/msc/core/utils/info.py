@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils.info_utils"""
+"""tvm.contrib.msc.core.utils.info"""
 
 import os
 import json
@@ -41,6 +41,7 @@ def load_dict(str_dict: str, flavor: str = "json") -> dict:
             dict_obj = json.load(f)
     elif isinstance(str_dict, str):
         dict_obj = json.loads(str_dict)
+    assert flavor == "json", "Unexpected flavor for load_dict: " + str(flavor)
     return dict_obj
 
 

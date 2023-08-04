@@ -21,11 +21,16 @@
  * \file src/contrib/msc/core/ir/graph.h
  * \brief Core MSCGraph.
  */
-#ifndef TVM_CONTRIB_MSC_CORE_IR_MSC_GRAPH_H_
-#define TVM_CONTRIB_MSC_CORE_IR_MSC_GRAPH_H_
+#ifndef TVM_CONTRIB_MSC_CORE_IR_GRAPH_H_
+#define TVM_CONTRIB_MSC_CORE_IR_GRAPH_H_
 
 #include <dmlc/json.h>
 #include <tvm/tir/data_layout.h>
+
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "../utils.h"
 
@@ -316,13 +321,13 @@ class BaseJointNode : public Object {
     T val;
     ICHECK(GetAttr(key, &val)) << "Can not get attr " << key;
     return val;
-  };
+  }
   template <typename T>
   const std::vector<T> GetTypeArrayAttr(const String& key) const {
     std::vector<T> val;
     ICHECK(GetAttr(key, &val)) << "Can not get attr " << key;
     return val;
-  };
+  }
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("index", &index);
@@ -743,4 +748,4 @@ class WeightGraph : public BaseGraph {
 }  // namespace msc
 }  // namespace contrib
 }  // namespace tvm
-#endif  // TVM_CONTRIB_MSC_CORE_IR_MSC_GRAPH_H_
+#endif  // TVM_CONTRIB_MSC_CORE_IR_GRAPH_H_

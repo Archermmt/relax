@@ -167,7 +167,6 @@ def from_relay(
         msc_transform.SetExprName(as_relax=False),
     ]
     mod = tvm.transform.Sequential(passes)(mod)
-    print("raw mod " + str(mod["main"]))
     graph = _ffi_api.BuildFromRelay(mod, "main", msc_utils.dump_dict(build_config))
     t_weights = _ffi_api.GetRelayWeights(mod, "main")
     return graph, normalize_weights(t_weights, graph)

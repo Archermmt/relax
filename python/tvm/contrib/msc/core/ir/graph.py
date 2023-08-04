@@ -16,9 +16,8 @@
 # under the License.
 """tvm.contrib.msc.core.ir.graph"""
 
-import os
-import numpy as np
 from typing import Dict, Tuple, List, Optional, Union
+import numpy as np
 
 import tvm
 from tvm.runtime import Object
@@ -465,14 +464,14 @@ class MSCGraph(BaseGraph):
             return False
         if self.input_names != other.input_names or self.output_names != other.output_names:
             return False
-        for i, o_i in zip(self.get_inputs(), other.get_inputs()):
-            if not i.is_same(o_i):
+        for s_i, o_i in zip(self.get_inputs(), other.get_inputs()):
+            if not s_i.is_same(o_i):
                 return False
-        for o, o_o in zip(self.get_outputs(), other.get_outputs()):
-            if not o.is_same(o_o):
+        for s_o, o_o in zip(self.get_outputs(), other.get_outputs()):
+            if not s_o.is_same(o_o):
                 return False
-        for n, o_n in zip(self.get_nodes(), other.get_nodes()):
-            if not n.is_same(o_n):
+        for s_n, o_n in zip(self.get_nodes(), other.get_nodes()):
+            if not s_n.is_same(o_n):
                 return False
         return True
 

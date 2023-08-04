@@ -21,8 +21,10 @@
  * \file src/contrib/msc/framework/tvm/config.h
  * \brief Relax codegen for MSCJoint.
  */
-#ifndef TVM_CONTRIB_MSC_FRAMEWORK_TVM_CONFIG_H_
-#define TVM_CONTRIB_MSC_FRAMEWORK_TVM_CONFIG_H_
+#ifndef TVM_CONTRIB_MSCFramework_TVM_CONFIG_H_
+#define TVM_CONTRIB_MSCFramework_TVM_CONFIG_H_
+
+#include <string>
 
 #include "../../core/codegen/base_codegen.h"
 
@@ -33,7 +35,7 @@ namespace msc {
 /*!
  * \brief CodeGen config for tvm codegen
  */
-struct RelaxCodeDenConfig {
+struct RelaxCodeGenConfig {
   bool explicit_name{true};
   bool from_relay{false};
   CODEGEN_CONFIG_MEMBERS
@@ -55,4 +57,4 @@ struct RelaxCodeDenConfig {
 }  // namespace msc
 }  // namespace contrib
 }  // namespace tvm
-#endif  // TVM_CONTRIB_MSC_FRAMEWORK_TVM_CONFIG_H_
+#endif  // TVM_CONTRIB_MSCFramework_TVM_CONFIG_H_

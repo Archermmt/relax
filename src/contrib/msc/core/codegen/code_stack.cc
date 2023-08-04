@@ -107,7 +107,7 @@ void BaseStack::FuncEnd(const String& ret_val) {
   }
   const auto& block = PopBlock();
   const auto& func = PopCheckedDoc<FunctionDoc, FunctionDocNode>();
-  const auto& body = CodeGenUtils::ToStmts(block);
+  const auto& body = DocUtils::ToStmts(block);
   PushDoc(FunctionDoc(func->name, func->args, func->decorators, func->return_type, body));
 }
 
@@ -193,14 +193,14 @@ void BaseStack::ConditionIf(const String& predicate) {
 void BaseStack::ConditionElse() {
   const auto& block = PopBlock();
   const auto& if_doc = PopCheckedDoc<IfDoc, IfDocNode>();
-  PushDoc(IfDoc(if_doc->predicate, CodeGenUtils::ToStmts(block), Array<StmtDoc>()));
+  PushDoc(IfDoc(if_doc->predicate, DocUtils::ToStmts(block), Array<StmtDoc>()));
   BlockStart();
 }
 
 void BaseStack::ConditionEnd() {
   const auto& block = PopBlock();
   const auto& if_doc = PopCheckedDoc<IfDoc, IfDocNode>();
-  const auto& branch = CodeGenUtils::ToStmts(block);
+  const auto& branch = DocUtils::ToStmts(block);
   if (if_doc->then_branch.size() == 0) {
     PushDoc(IfDoc(if_doc->predicate, branch, Array<StmtDoc>()));
   } else {
@@ -216,7 +216,7 @@ void BaseStack::BlockStart() {
 void BaseStack::BlockEnd(bool block_docs) {
   const auto& docs = PopBlock();
   if (block_docs) {
-    PushDoc(CodeGenUtils::ToStmtBlock(docs));
+    PushDoc(DocUtils::ToStmtBlock(docs));
   } else {
     for (const auto& d : docs) {
       PushDoc(d);
@@ -236,7 +236,7 @@ void BaseStack::ScopeStart(const String& scope_def, const String& scope_ref) {
 void BaseStack::ScopeEnd() {
   const auto& block = PopBlock();
   const auto& scope = PopCheckedDoc<ScopeDoc, ScopeDocNode>();
-  PushDoc(ScopeDoc(scope->lhs, scope->rhs, CodeGenUtils::ToStmts(block)));
+  PushDoc(ScopeDoc(scope->lhs, scope->rhs, DocUtils::ToStmts(block)));
 }
 
 bool BaseStack::HasBlock() const { return blocks_.size() > 0; }

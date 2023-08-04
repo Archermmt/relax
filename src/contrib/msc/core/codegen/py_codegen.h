@@ -27,6 +27,8 @@
 #include <dmlc/json.h>
 #include <tvm/script/printer/doc.h>
 
+#include <string>
+
 #include "../printer/python_printer.h"
 #include "base_codegen.h"
 #include "code_stack.h"
@@ -39,15 +41,15 @@ namespace msc {
 using namespace tvm::script::printer;
 
 template <typename ConfigType>
-class PyGraphCodeGen : public BaseGraphCodeGen<ConfigType> {
+class PyCodeGen : public BaseCodeGen<ConfigType> {
  public:
   /*!
-   * \brief The constructor of PyGraphCodeGen
+   * \brief The constructor of PyCodeGen
    * \param graph the graph to be generated.
    * \param config the options for codegen.
    */
-  explicit PyGraphCodeGen(const MSCGraph& graph, const std::string& config = "")
-      : BaseGraphCodeGen<ConfigType>(graph, config) {}
+  explicit PyCodeGen(const MSCGraph& graph, const std::string& config = "")
+      : BaseCodeGen<ConfigType>(graph, config) {}
 
   /*! \brief Stack the docs for the script*/
   virtual const Array<Doc> GetDocs() {

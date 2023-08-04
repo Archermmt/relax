@@ -28,6 +28,9 @@
 #include <tvm/relax/expr.h>
 #include <tvm/relay/expr.h>
 
+#include <tuple>
+#include <vector>
+
 namespace tvm {
 namespace contrib {
 namespace msc {
@@ -126,28 +129,11 @@ class ArrayUtils {
       }
     }
     return new_array;
-  };
+  }
 
   /*!
    * \brief Find the index of element.
-   * \return The index, -1 if not founc.
-   */
-  /*
-  template <typename T>
-  TVM_DLL static int IndexOf(const Array<T>& array, const T& ele) {
-    std::cout << "ele type " << ele->GetTypeKey() << std::endl;
-    for (size_t i = 0; i < array.size(); i++) {
-      if (array[i] == ele) {
-        return i;
-      }
-    }
-    return -1;
-  };
-  */
-
-  /*!
-   * \brief Find the index of element.
-   * \return The index, -1 if not founc.
+   * \return The index, -1 if not found.
    */
   template <typename T>
   TVM_DLL static int IndexOf(const std::vector<T>& array, const T& ele) {
@@ -157,7 +143,20 @@ class ArrayUtils {
       }
     }
     return -1;
-  };
+  }
+
+  /*!
+   * \brief Downcast elements in the array.
+   * \return The downcasted array
+   */
+  template <typename T>
+  TVM_DLL static const Array<T> Cast(const Array<PrimExpr>& src_array) {
+    Array<T> new_array;
+    for (const auto& s : src_array) {
+      new_array.push_back(Downcast<T>(s));
+    }
+    return new_array;
+  }
 };
 
 /*!

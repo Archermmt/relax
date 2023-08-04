@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""tvm.contrib.msc.core.utils.expr_utils"""
+"""tvm.contrib.msc.core.utils.expr"""
 
 import tvm
 from tvm import relax
@@ -37,6 +37,8 @@ def get_span_attrs(mod: tvm.IRModule) -> dict:
 
     @relax.expr_functor.visitor
     class SpanVisitor(PyExprVisitor):
+        """Visitor for get attributes in span"""
+
         def extract(self, expr: relax.Expr) -> dict:
             self._span_info = {}
             if isinstance(expr, relax.Expr):
@@ -87,17 +89,17 @@ def msc_script(mod: tvm.IRModule, script: str = "") -> str:
     script = script or str(mod)
     attrs = get_span_attrs(mod)
     cur_attr, lines = {}, []
-    for l in script.split("\n"):
-        if l.strip().startswith("def "):
-            func_name = l.strip().split("def ")[1].split("(")[0]
+    for line in script.split("\n"):
+        if line.strip().startswith("def "):
+            func_name = line.strip().split("def ")[1].split("(")[0]
             cur_attr = attrs.get(func_name, {})
-        if ": " in l:
-            v_name = l.strip().split(": ")[0]
+        if ": " in line:
+            v_name = line.strip().split(": ")[0]
             if v_name in cur_attr:
-                l += (
+                line += (
                     " # "
                     + ", ".join(["{}={}".format(k, v) for k, v in cur_attr[v_name].items()])
                     + " #"
                 )
-        lines.append(l)
+        lines.append(line)
     return "\n".join(lines)

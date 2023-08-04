@@ -19,13 +19,17 @@
 
 /*!
  * \file src/contrib/msc/core/codegen/base_codegen.h
- * \brief Basic CodeGen for MSCGraph.
+ * \brief Basic CodeGen for MSCGraph and MSCJoint.
  */
 #ifndef TVM_CONTRIB_MSC_CORE_CODEGEN_BASE_CODEGEN_H_
 #define TVM_CONTRIB_MSC_CORE_CODEGEN_BASE_CODEGEN_H_
 
 #include <dmlc/json.h>
 #include <tvm/script/printer/doc.h>
+
+#include <memory>
+#include <stack>
+#include <string>
 
 #include "../ir/graph.h"
 #include "code_stack.h"
@@ -41,35 +45,34 @@ using namespace tvm::script::printer;
  * \brief CodeGen for MSCJoint op
  */
 template <typename ConfigType>
-class BaseOpCodeGen {
+class BaseOpCode {
  public:
   /*!
-   * \brief The constructor of BaseOpCodeGen
+   * \brief The constructor of BaseOpCode
    * \param func_name the function name for the node.
-   * \param config the config json for the node.
    */
-  explicit BaseOpCodeGen(const String& func_name) : func_name_(func_name) {}
+  explicit BaseOpCode(const String& func_name) : func_name_(func_name) {}
 
-  virtual ~BaseOpCodeGen() = default;
+  virtual ~BaseOpCode() = default;
 
-  /*! \brief Config the BaseOpCodeGen*/
+  /*! \brief Config the BaseOpCode*/
   void Config(const MSCJoint& node, const std::shared_ptr<ConfigType> config) {
     node_ = node;
     config_ = config;
   }
 
   /*! \brief Get return describe for default node*/
-  virtual const String IdxNode(bool as_raw = true) { return IdxNode(node_, as_raw); };
+  virtual const String IdxNode(bool as_raw = true) { return IdxNode(node_, as_raw); }
 
   /*! \brief Get describe for default node input*/
   virtual const String IdxInput(int idx = 0, bool as_raw = false) {
     return IdxInput(node_, idx, as_raw);
-  };
+  }
 
   /*! \brief Get describe for default node output*/
   virtual const String IdxOutput(int idx = 0, bool as_raw = false) {
     return IdxOutput(node_, idx, as_raw);
-  };
+  }
 
   /*! \brief Get describe for default node weight*/
   virtual const String IdxWeight(const String& wtype, bool as_raw = false) {
@@ -96,14 +99,14 @@ class BaseOpCodeGen {
  * \brief CodeGen for MSCGraph
  */
 template <typename ConfigType>
-class BaseGraphCodeGen {
+class BaseCodeGen {
  public:
   /*!
-   * \brief The constructor of BaseGraphCodeGen
+   * \brief The constructor of BaseCodeGen
    * \param graph the graph to be generated.
    * \param config the options for codegen.
    */
-  explicit BaseGraphCodeGen(const MSCGraph& graph, const std::string& config = "") {
+  explicit BaseCodeGen(const MSCGraph& graph, const std::string& config = "") {
     graph_ = graph;
     config_.reset(new ConfigType());
     if (config.size() > 0) {
@@ -116,7 +119,7 @@ class BaseGraphCodeGen {
     }
   }
 
-  virtual ~BaseGraphCodeGen() = default;
+  virtual ~BaseCodeGen() = default;
 
   /*! \brief Get sources*/
   virtual const Map<String, String> GetSources(const std::string& print_options = "") = 0;
@@ -171,10 +174,7 @@ class BaseGraphCodeGen {
   CodeStack stack_;
 
  private:
-  /*! \brief The graph*/
   MSCGraph graph_;
-
-  /*! \brief The scopes for graph*/
   std::stack<Array<String>> scopes_;
 };
 
