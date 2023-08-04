@@ -23,7 +23,6 @@ import tvm.testing
 from tvm.relax.frontend.torch import from_fx
 from tvm.relay.frontend import from_pytorch
 from tvm.contrib.msc.core.ir import translate
-from tvm.contrib.msc.core import utils as msc_utils
 from tvm.contrib.msc.framework.tvm import codegen as tvm_codegen
 
 
